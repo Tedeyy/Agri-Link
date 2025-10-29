@@ -33,7 +33,7 @@
                     Connecting farmers, buyers, and agricultural innovators in one powerful platform
                 </p>
                 <div class="hero-buttons">
-                    <a href="pages/authentication/login.php" class="btn btn-primary">
+                    <a href="pages/authentication/loginpage.php" class="btn btn-primary">
                         <i class="fas fa-sign-in-alt"></i>
                         Login
                     </a>
