@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InnoVision - Agricultural Innovation Platform</title>
+    <link rel="stylesheet" href="pages/style/indexstyle.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-seedling"></i>
+                <span>InnoVision</span>
+            </div>
+            <div class="nav-links">
+                <a href="pages/about.php">About</a>
+                <a href="pages/features.php">Features</a>
+                <a href="pages/contact.php">Contact</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h1 class="hero-title">
+                    Welcome to <span class="highlight">InnoVision</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Connecting farmers, buyers, and agricultural innovators in one powerful platform
+                </p>
+                <div class="hero-buttons">
+                    <a href="pages/authentication/login.php" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Login
+                    </a>
+                    <a href="#register" class="btn btn-secondary">
+                        <i class="fas fa-user-plus"></i>
+                        Get Started
+                    </a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="floating-card">
+                    <i class="fas fa-tractor"></i>
+                    <h3>Smart Farming</h3>
+                </div>
+                <div class="floating-card">
+                    <i class="fas fa-handshake"></i>
+                    <h3>Direct Trade</h3>
+                </div>
+                <div class="floating-card">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>Market Insights</h3>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Why Choose InnoVision?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>For Farmers</h3>
+                    <p>Connect directly with buyers, showcase your products, and grow your business with our seller tools.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <h3>For Buyers</h3>
+                    <p>Discover fresh, local products directly from farmers with transparent pricing and quality assurance.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>Secure Platform</h3>
+                    <p>Your data and transactions are protected with enterprise-grade security and verification systems.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="register" class="register-section">
+        <div class="container">
+            <h2 class="section-title">Join Our Community</h2>
+            <div class="register-cards">
+                <div class="register-card">
+                    <div class="card-icon">
+                        <i class="fas fa-store"></i>
+                    </div>
+                    <h3>Register as Seller</h3>
+                    <p>Start selling your agricultural products directly to buyers</p>
+                    <a href="pages/authentication/seller/req.php" class="btn btn-outline">
+                        <i class="fas fa-arrow-right"></i>
+                        Start Selling
+                    </a>
+                </div>
+                <div class="register-card">
+                    <div class="card-icon">
+                        <i class="fas fa-shopping-bag"></i>
+                    </div>
+                    <h3>Register as Buyer</h3>
+                    <p>Connect with farmers and purchase fresh products</p>
+                    <a href="pages/authentication/buyer/req.php" class="btn btn-outline">
+                        <i class="fas fa-arrow-right"></i>
+                        Start Buying
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <i class="fas fa-seedling"></i>
+                        <span>InnoVision</span>
+                    </div>
+                    <p>Empowering agricultural communities through technology and innovation.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Support(ongoing dev)</h4>
+                    <ul>
+                        <li><a href="#help">Help Center</a></li>
+                        <li><a href="#contact">Contact Us</a></li>
+                        <li><a href="#privacy">Privacy Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 InnoVision. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
