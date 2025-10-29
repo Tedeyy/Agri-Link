@@ -18,11 +18,11 @@ session_start();
 
             <div class="options">
                 <form>
-                    <button class="opt buyer" type="submit" formaction="buyer/req.php">
+                    <button class="opt buyer" type="submit" formaction="buyer/registrationform.php">
                         <span class="icon">🛒</span>
                         Register as Buyer
                     </button>
-                    <button class="opt seller" type="submit" formaction="seller/req.php">
+                    <button class="opt seller" type="submit" formaction="seller/registrationform.php">
                         <span class="icon">🏪</span>
                         Register as Seller
                     </button>
