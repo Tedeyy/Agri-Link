@@ -16,6 +16,7 @@
                 <span>InnoVision</span>
             </div>
             <div class="nav-links">
+                <a href="pages/testing.php">AuthTesting</a>
                 <a href="pages/about.php">About</a>
                 <a href="pages/features.php">Features</a>
                 <a href="pages/contact.php">Contact</a>
