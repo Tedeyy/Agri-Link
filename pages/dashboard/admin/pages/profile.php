@@ -147,6 +147,8 @@ if ($userId) {
           <input name="role" type="text" value="<?php echo htmlspecialchars($data['role']); ?>" />
         </div>
         <div class="actions">
+          <a class="secondary" href="../dashboard.php">Back</a>
+          <button class="ghost" type="button">Reset password</button>
           <button class="primary" type="submit">Save changes</button>
         </div>
       </form>
