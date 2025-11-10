@@ -17,17 +17,17 @@ session_start();
             <p class="sub">Choose how you want to manage InnoVision</p>
             <div class="options">
                 <form>
-                    <button class="opt admin" type="submit" formaction="admin/registrationform.php">
+                    <button class="opt admin" type="submit" formaction="admin/registrationform.html">
                         <span class="icon">🛡️</span>
                         Register as Admin
                     </button>
-                    <button class="opt bat" type="submit" formaction="bat/registrationform.php">
+                    <button class="opt bat" type="submit" formaction="bat/registrationform.html">
                         <span class="icon">🏷️</span>
                         Register as BAT
                     </button>
                 </form>
             </div>
-            <div class="back"><a href="../registrationpage.php">Back</a></div>
+            <div class="back"><a href="../registrationpage.html">Back</a></div>
         </div>
     </div>
 </body>

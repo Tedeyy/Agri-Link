@@ -10,7 +10,12 @@
     <div class="login-container">
         <form action="login.php" method="post">
             <h2>Login to InnoVision</h2>
-            <?php if (isset($_GET['registered']) && $_GET['registered'] === '1'): ?>
+            <?php if (isset($_GET['submitted']) && $_GET['submitted'] === '1'): ?>
+            <div class="register-link" style="color:#16a34a; font-weight:600; margin:8px 0;">
+                Registration submitted. Please check your email to confirm your account.
+            </div>
+            <?php endif; ?>
+            <?php if (isset($_GET['confirmed']) && $_GET['confirmed'] === '1'): ?>
             <div class="register-link" style="color:#16a34a; font-weight:600; margin:8px 0;">
                 Registration confirmed. You can now log in.
             </div>

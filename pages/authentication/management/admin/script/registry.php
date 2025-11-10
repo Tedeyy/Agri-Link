@@ -59,7 +59,7 @@ if (!$SUPABASE_URL || !$SUPABASE_KEY){
 
 // Supabase Auth signup to trigger email confirmation
 $APP_URL = getenv('APP_URL') ?: loadEnvValue('APP_URL');
-$redirectTo = ($APP_URL ? rtrim($APP_URL, '/') : '') . '/pages/authentication/loginpage.html?registered=1';
+$redirectTo = ($APP_URL ? rtrim($APP_URL, '/') : '') . '/pages/authentication/loginpage.php?confirmed=1';
 $authUrl = rtrim($SUPABASE_URL, '/') . '/auth/v1/signup?redirect_to=' . urlencode($redirectTo);
 $authPayload = json_encode([
     'email' => $_POST['email'],
@@ -184,4 +184,6 @@ if ($http2 < 200 || $http2 >= 300){
     respond($http2, 'Storage HTTP '.$http2.': '.$res2);
 }
 
-respond(200, 'Registration submitted');
+// Redirect user to login page with submitted message
+header('Location: ' . (($APP_URL ? rtrim($APP_URL, '/') : '') . '/pages/authentication/loginpage.php?submitted=1'));
+exit;
