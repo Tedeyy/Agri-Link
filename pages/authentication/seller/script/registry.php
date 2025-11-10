@@ -57,6 +57,39 @@ if (!$SUPABASE_URL || !$SUPABASE_KEY){
     respond(500, 'Supabase config missing');
 }
 
+// Sign up user in Supabase Auth to trigger email confirmation with redirect to login page
+$APP_URL = getenv('APP_URL') ?: loadEnvValue('APP_URL');
+$redirectTo = ($APP_URL ? rtrim($APP_URL, '/') : '') . '/pages/authentication/loginpage.html?registered=1';
+$authUrl = rtrim($SUPABASE_URL, '/') . '/auth/v1/signup?redirect_to=' . urlencode($redirectTo);
+$authPayload = json_encode([
+    'email' => $_POST['email'],
+    'password' => $_POST['password'],
+    'data' => [
+        'username' => $_POST['username']
+    ]
+]);
+$chAuth = curl_init();
+curl_setopt($chAuth, CURLOPT_URL, $authUrl);
+curl_setopt($chAuth, CURLOPT_POST, true);
+curl_setopt($chAuth, CURLOPT_HTTPHEADER, [
+    'apikey: ' . $SUPABASE_KEY,
+    'Authorization: Bearer ' . $SUPABASE_KEY,
+    'Content-Type: application/json',
+    'Accept: application/json'
+]);
+curl_setopt($chAuth, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($chAuth, CURLOPT_POSTFIELDS, $authPayload);
+$authRes = curl_exec($chAuth);
+$authHttp = curl_getinfo($chAuth, CURLINFO_HTTP_CODE);
+$authErr = curl_error($chAuth);
+curl_close($chAuth);
+if ($authErr) {
+    respond(500, 'Auth signup error: ' . $authErr);
+}
+if ($authHttp < 200 || $authHttp >= 300) {
+    respond($authHttp, 'Auth signup HTTP ' . $authHttp . ': ' . $authRes);
+}
+
 $payload = [
     'user_fname' => $_POST['firstname'],
     'user_mname' => $_POST['middlename'],

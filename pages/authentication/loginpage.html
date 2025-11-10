@@ -10,6 +10,11 @@
     <div class="login-container">
         <form action="login.php" method="post">
             <h2>Login to InnoVision</h2>
+            <?php if (isset($_GET['registered']) && $_GET['registered'] === '1'): ?>
+            <div class="register-link" style="color:#16a34a; font-weight:600; margin:8px 0;">
+                Registration confirmed. You can now log in.
+            </div>
+            <?php endif; ?>
             
             <div class="form-group">
                 <label for="username">Username:</label>
