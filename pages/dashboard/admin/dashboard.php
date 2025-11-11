@@ -9,6 +9,58 @@ if ($role === 'admin') {
     $isVerified = ($src === 'admin');
 }
 $statusLabel = $isVerified ? 'Verified' : 'Under review';
+require_once __DIR__ . '/../../authentication/lib/supabase_client.php';
+
+// Prepare data for sales chart (last 3 months and next month)
+$labels = [];
+$monthKeys = [];
+$now = new DateTime('first day of this month 00:00:00');
+for ($i=-3; $i<=1; $i++){
+  $d = (clone $now)->modify(($i>=0?'+':'').$i.' month');
+  $labels[] = $d->format('M');
+  $monthKeys[] = $d->format('Y-m');
+}
+
+// Get livestock types
+[$typesRes,$typesStatus,$typesErr] = sb_rest('GET','livestock_type',['select'=>'name']);
+$typeNames = [];
+if ($typesStatus>=200 && $typesStatus<300 && is_array($typesRes)){
+  foreach ($typesRes as $row){ if (!empty($row['name'])) $typeNames[] = $row['name']; }
+}
+// Fallback default labels if table empty
+if (count($typeNames)===0){ $typeNames = ['Cattle','Goat','Pigs']; }
+
+// Fetch sold listings; filter in PHP to avoid complex PostgREST params here
+[$soldRes,$soldStatus,$soldErr] = sb_rest('GET','soldlivestocklisting',['select'=>'livestock_type,price,created']);
+$series = [];
+foreach ($typeNames as $tn){ $series[$tn] = array_fill(0, count($monthKeys), 0); }
+if ($soldStatus>=200 && $soldStatus<300 && is_array($soldRes)){
+  foreach ($soldRes as $r){
+    $lt = $r['livestock_type'] ?? null;
+    $price = (float)($r['price'] ?? 0);
+    $created = isset($r['created']) ? substr($r['created'],0,7) : null; // YYYY-MM
+    if (!$lt || !$created) continue;
+    $idx = array_search($created, $monthKeys, true);
+    if ($idx===false) continue;
+    if (!isset($series[$lt])) continue;
+    $series[$lt][$idx] += $price;
+  }
+}
+
+// Build datasets with colors
+$palette = ['#8B4513','#16a34a','#ec4899','#2563eb','#f59e0b','#10b981','#ef4444','#6b7280'];
+$datasets = [];
+foreach ($typeNames as $i=>$tn){
+  $datasets[] = [
+    'label' => $tn,
+    'data' => $series[$tn],
+    'borderColor' => $palette[$i % count($palette)],
+    'backgroundColor' => 'transparent',
+    'tension' => 0.3,
+    'spanGaps' => true,
+    'pointRadius' => 0
+  ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -44,6 +96,31 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
         <div class="card">
             <p>Use this space to manage users, view system stats, and oversee platform content.</p>
         </div>
+
+        <div class="card">
+            <h3>Sales by Livestock Type</h3>
+            <div class="chartbox"><canvas id="adminSalesChart"></canvas></div>
+        </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+    (function(){
+      var el = document.getElementById('adminSalesChart');
+      if (!el || !window.Chart) return;
+      var labels = <?php echo json_encode($labels); ?>;
+      var datasets = <?php echo json_encode($datasets); ?>;
+      new Chart(el, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true, suggestedMin: 0 } }
+        }
+      });
+    })();
+    </script>
 </body>
 </html>

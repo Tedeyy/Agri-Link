@@ -1,6 +1,14 @@
 <?php
 session_start();
 $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_SESSION['firstname'] : 'User';
+// Compute verification status from role and source table
+$role = $_SESSION['role'] ?? '';
+$src  = $_SESSION['source_table'] ?? '';
+$isVerified = false;
+if ($role === 'superadmin') {
+    $isVerified = ($src === 'superadmin');
+}
+$statusLabel = $isVerified ? 'Verified' : 'Under review';
 ?>
 <!DOCTYPE html>
 <html lang="en">
