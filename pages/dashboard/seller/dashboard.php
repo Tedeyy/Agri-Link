@@ -5,10 +5,35 @@ $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_
 $role = $_SESSION['role'] ?? '';
 $src  = $_SESSION['source_table'] ?? '';
 $isVerified = false;
-if ($role === 'seller') {
+if ($role === 'bat') {
+    $isVerified = ($src === 'bat');
+} elseif ($role === 'buyer') {
+    $isVerified = ($src === 'buyer');
+} elseif ($role === 'seller') {
     $isVerified = ($src === 'seller');
+} elseif ($role === 'admin') {
+    $isVerified = ($src === 'admin');
+} elseif ($role === 'superadmin') {
+    $isVerified = ($src === 'superadmin');
 }
 $statusLabel = $isVerified ? 'Verified' : 'Under review';
+
+require_once __DIR__ . '/../../authentication/lib/supabase_client.php';
+$sellerId = $_SESSION['user_id'] ?? null;
+$pendingCount = 0; $activeCount = 0; $soldCount = 0; $deniedCount = 0;
+if ($sellerId){
+    function table_count_for_seller($tables, $sellerId){
+        foreach ($tables as $t){
+            [$res,$st,$err] = sb_rest('GET', $t, ['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+            if ($st>=200 && $st<300 && is_array($res)) return count($res);
+        }
+        return 0;
+    }
+    $pendingCount = table_count_for_seller(['reviewlivestocklisting','reviewlivestocklistings'], $sellerId);
+    $activeCount  = table_count_for_seller(['livestocklisting','livestocklistings'], $sellerId);
+    $soldCount    = table_count_for_seller(['soldlivestocklisting','soldlivestocklistings'], $sellerId);
+    $deniedCount  = table_count_for_seller(['deniedlivestocklisting','deniedlivestocklistings'], $sellerId);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -47,7 +72,28 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
             </div>
         </div>
         <div class="card">
-            <p>Manage your listings and view recent activity here.</p>
+            <p>Your Listings</p>
+            <div class="listingstatus">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0;">
+                    <div class="card" style="padding:12px;">
+                        <div style="color:#4a5568;font-size:12px;">Pending Review</div>
+                        <div style="font-size:20px;font-weight:600;"><?php echo (int)$pendingCount; ?></div>
+                    </div>
+                    <div class="card" style="padding:12px;">
+                        <div style="color:#4a5568;font-size:12px;">Active</div>
+                        <div style="font-size:20px;font-weight:600;"><?php echo (int)$activeCount; ?></div>
+                    </div>
+                    <div class="card" style="padding:12px;">
+                        <div style="color:#4a5568;font-size:12px;">Sold</div>
+                        <div style="font-size:20px;font-weight:600;"><?php echo (int)$soldCount; ?></div>
+                    </div>
+                    <div class="card" style="padding:12px;">
+                        <div style="color:#4a5568;font-size:12px;">Denied</div>
+                        <div style="font-size:20px;font-weight:600;"><?php echo (int)$deniedCount; ?></div>
+                    </div>
+                </div>
+                <a class="btn" href="pages/managelistings.php">Manage Listings</a>
+            </div>
         </div>
 
         <div class="card">
