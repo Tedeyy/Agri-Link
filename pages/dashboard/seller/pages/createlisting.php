@@ -3,7 +3,8 @@ session_start();
 require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
 
 $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_SESSION['firstname'] : 'User';
-$seller_id = $_SESSION['user_id'] ?? null;
+$seller_id = $_SESSION['seller_id'] ?? ($_SESSION['user_id'] ?? null);
+if ($seller_id !== null) { $seller_id = (int)$seller_id; }
 if (!$seller_id) {
   http_response_code(302);
   header('Location: ../dashboard.php');
@@ -31,84 +32,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $province = '';
   $age = isset($_POST['age']) ? (int)$_POST['age'] : 0;
   $weight = isset($_POST['weight']) ? (float)$_POST['weight'] : 0.0;
-  $marketprice = isset($_POST['marketprice']) ? (float)$_POST['marketprice'] : 0.0;
   $price = isset($_POST['price']) ? (float)$_POST['price'] : 0.0;
 
   if ($livestock_type_name === '' || $breed_name === '' || $address === '' || $age <= 0 || $weight <= 0 || $price <= 0) {
     $error = 'Please complete all fields with valid values.';
   } else {
-    $payload = [[
-      'seller_id' => (int)$seller_id,
+    // Verify seller exists to satisfy FK constraint on livestocklisting_logs(seller_id -> seller.user_id)
+    $effectiveSellerId = (int)$seller_id;
+    [$sres, $sstatus, $serr] = sb_rest('GET', 'seller', [
+      'select' => 'user_id',
+      'user_id' => 'eq.'.$effectiveSellerId,
+      'limit' => 1
+    ]);
+    if (!($sstatus>=200 && $sstatus<300) || !is_array($sres) || count($sres)===0){
+      // Try fallback to session user_id if different from seller_id
+      $sessionUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null;
+      if ($sessionUserId && $sessionUserId !== $effectiveSellerId){
+        [$sres2, $sstatus2, $serr2] = sb_rest('GET', 'seller', [
+          'select' => 'user_id',
+          'user_id' => 'eq.'.$sessionUserId,
+          'limit' => 1
+        ]);
+        if ($sstatus2>=200 && $sstatus2<300 && is_array($sres2) && count($sres2)>0){
+          $effectiveSellerId = $sessionUserId;
+        } else {
+          $error = 'Your seller profile is not yet activated in seller table. Please complete seller setup.';
+        }
+      } else {
+        $error = 'Your seller profile is not yet activated in seller table. Please complete seller setup.';
+      }
+    }
+
+    if ($error){
+      // stop processing early
+    } else {
+    // 1) Log entry first (let DB default status apply)
+    $logPayload = [[
+      'seller_id' => (int)$effectiveSellerId,
       'livestock_type' => $livestock_type_name,
       'breed' => $breed_name,
       'address' => $address,
-      'barangay' => $barangay,
-      'municipality' => $municipality,
-      'province' => $province,
       'age' => (int)$age,
       'weight' => (float)$weight,
       'price' => (float)$price
     ]];
-    [$ires, $istatus, $ierr] = sb_rest('POST', 'reviewlivestocklisting', [], $payload, ['Prefer: return=representation']);
-    if ($istatus >= 200 && $istatus < 300) {
-      // Expect created row back
-      $created = is_array($ires) && isset($ires[0]) ? $ires[0] : null;
-      $listingId = $created['listing_id'] ?? null;
-      // Attempt to upload photos to storage if provided
-      if ($listingId && isset($_FILES['photos']) && is_array($_FILES['photos']['name'])){
-        $fullName = isset($_SESSION['name']) && $_SESSION['name'] !== '' ? $_SESSION['name'] : $firstname;
-        $folder = $listingId.'_'.preg_replace('/[^A-Za-z0-9_\- ]/','', str_replace(' ','_', $fullName));
-        $base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
-        $service = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
-        $auth = $_SESSION['supa_access_token'] ?? ($service ?: (getenv('SUPABASE_KEY') ?: ''));
-        $bucketPathPrefix = rtrim($base,'/').'/storage/v1/object/listings/underreview/'.$folder.'/';
-        $count = count($_FILES['photos']['name']);
-        for ($i=0; $i<$count; $i++){
-          if ($_FILES['photos']['error'][$i] !== UPLOAD_ERR_OK) continue;
-          $tmp = $_FILES['photos']['tmp_name'][$i];
-          $orig = $_FILES['photos']['name'][$i];
-          $ext = pathinfo($orig, PATHINFO_EXTENSION);
-          $safe = preg_replace('/[^A-Za-z0-9_\-\.]/','_', $orig);
-          $fname = uniqid('img_', true).($ext?('.'.$ext):'');
-          $pathUrl = $bucketPathPrefix.$fname;
-          $mime = mime_content_type($tmp) ?: 'application/octet-stream';
-          $ch = curl_init();
-          curl_setopt_array($ch, [
-            CURLOPT_URL => $pathUrl,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_HTTPHEADER => [
-              'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
-              'Authorization: Bearer '.$auth,
-              'Content-Type: '.$mime,
-              'x-upsert: true'
-            ],
-            CURLOPT_POSTFIELDS => file_get_contents($tmp)
-          ]);
-          $upRes = curl_exec($ch);
-          $upCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-          $upErr = curl_error($ch);
-          curl_close($ch);
-          if ($upCode>=200 && $upCode<300){ $uploadedInfo[] = $fname; }
-        }
-      }
-      // Insert entry log
-      $logPayload = [[
-        'seller_id' => (int)$seller_id,
+    [$lres, $lstatus, $lerr] = sb_rest('POST', 'livestocklisting_logs', [], $logPayload, ['Prefer: return=representation']);
+    if (!($lstatus >= 200 && $lstatus < 300)) {
+      $detail = is_array($lres) ? json_encode($lres) : (string)$lres;
+      $error = 'Failed to write log (status '.strval($lstatus).'). Details: '.$detail;
+    } else {
+      // 2) Create review record and get listing_id + created
+      $payload = [[
+        'seller_id' => (int)$effectiveSellerId,
         'livestock_type' => $livestock_type_name,
         'breed' => $breed_name,
         'address' => $address,
         'age' => (int)$age,
         'weight' => (float)$weight,
-        'marketprice' => (float)$marketprice,
         'price' => (float)$price
       ]];
-      [$lres, $lstatus, $lerr] = sb_rest('POST', 'livestocklisting_logs', [], $logPayload, ['Prefer: return=minimal']);
-      $message = 'Listing submitted for review.'.(count($uploadedInfo)?(' Uploaded '.count($uploadedInfo).' image(s).'):'');
-      // Reset POST fields after success
-      $_POST = [];
-    } else {
-      $error = 'Failed to submit listing.';
+      [$ires, $istatus, $ierr] = sb_rest('POST', 'reviewlivestocklisting', [], $payload, ['Prefer: return=representation']);
+      if ($istatus >= 200 && $istatus < 300) {
+        $created = is_array($ires) && isset($ires[0]) ? $ires[0] : null;
+        $listingId = $created['listing_id'] ?? null;
+        $createdAt = $created['created'] ?? null;
+
+        // 3) Upload photos to storage bucket path listings/underreview/<seller_id>_<listing_id>_<created>/
+        if ($listingId && isset($_FILES['photos']) && is_array($_FILES['photos']['name'])){
+          $base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
+          $service = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
+          $auth = $_SESSION['supa_access_token'] ?? ($service ?: (getenv('SUPABASE_KEY') ?: ''));
+          $stamp = $createdAt ? date('YmdHis', strtotime($createdAt)) : date('YmdHis');
+          $folder = ((int)$seller_id).'_'.((int)$listingId).'_'.$stamp;
+          $bucketPathPrefix = rtrim($base,'/').'/storage/v1/object/listings/underreview/'.$folder.'/';
+          $count = count($_FILES['photos']['name']);
+          for ($i=0; $i<$count; $i++){
+            if ($_FILES['photos']['error'][$i] !== UPLOAD_ERR_OK) continue;
+            $tmp = $_FILES['photos']['tmp_name'][$i];
+            $orig = $_FILES['photos']['name'][$i];
+            $ext = pathinfo($orig, PATHINFO_EXTENSION);
+            $fname = uniqid('img_', true).($ext?('.'.$ext):'');
+            $pathUrl = $bucketPathPrefix.$fname;
+            $mime = mime_content_type($tmp) ?: 'application/octet-stream';
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+              CURLOPT_URL => $pathUrl,
+              CURLOPT_RETURNTRANSFER => true,
+              CURLOPT_CUSTOMREQUEST => 'POST',
+              CURLOPT_HTTPHEADER => [
+                'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
+                'Authorization: Bearer '.$auth,
+                'Content-Type: '.$mime,
+                'x-upsert: true'
+              ],
+              CURLOPT_POSTFIELDS => file_get_contents($tmp)
+            ]);
+            $upRes = curl_exec($ch);
+            $upCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $upErr = curl_error($ch);
+            curl_close($ch);
+            if ($upCode>=200 && $upCode<300){ $uploadedInfo[] = $fname; }
+          }
+        }
+
+        $message = 'Listing submitted for review.'.(count($uploadedInfo)?(' Uploaded '.count($uploadedInfo).' image(s).'):'');
+        // Reset POST fields after success
+        $_POST = [];
+      } else {
+        $error = 'Failed to submit listing to review (status '.strval($istatus).').';
+      }
+    }
     }
   }
 }
@@ -123,12 +156,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="stylesheet" href="../style/dashboard.css">
 </head>
 <body>
-  <div class="wrap">
+  <div class="wrap" style="max-width:1100px;margin:0 auto;">
     <div class="top">
       <div><h1>Create Listing</h1></div>
       <div><a class="btn" href="../dashboard.php">Back to Dashboard</a></div>
     </div>
-    <div class="card">
+    <div class="card" style="max-width:900px;margin:0 auto;">
       <?php if ($message): ?>
         <div style="padding:10px;border:1px solid #c6f6d5;background:#f0fff4;color:#22543d;border-radius:8px;margin-bottom:12px;"><?php echo htmlspecialchars($message, ENT_QUOTES, 'UTF-8'); ?></div>
       <?php endif; ?>
@@ -167,16 +200,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="number" min="0" step="0.01" name="weight" value="<?php echo htmlspecialchars($_POST['weight'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required />
           </div>
           <div>
-            <label>Market Price</label>
-            <input type="number" min="0" step="0.01" name="marketprice" value="<?php echo htmlspecialchars($_POST['marketprice'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required />
-          </div>
-          <div>
             <label>Price</label>
             <input type="number" min="0" step="0.01" name="price" value="<?php echo htmlspecialchars($_POST['price'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required />
           </div>
           <div style="grid-column:1 / span 2">
             <label>Upload Photos (proof)</label>
-            <input type="file" name="photos[]" accept="image/*" multiple />
+            <input id="photos" type="file" name="photos[]" accept="image/*" multiple />
+            <div id="photoPreview" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;">
@@ -215,6 +245,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
       document.getElementById('livestock_type')?.addEventListener('change', populateBreeds);
       populateBreeds();
+
+      // Image previews
+      var fileInput = document.getElementById('photos');
+      var preview = document.getElementById('photoPreview');
+      if (fileInput && preview){
+        fileInput.addEventListener('change', function(){
+          while (preview.firstChild) preview.removeChild(preview.firstChild);
+          var files = Array.prototype.slice.call(fileInput.files || []);
+          files.forEach(function(f){
+            if (!f.type || !f.type.startsWith('image/')) return;
+            var reader = new FileReader();
+            reader.onload = function(e){
+              var img = document.createElement('img');
+              img.src = e.target.result;
+              img.alt = f.name;
+              img.style.width = '110px';
+              img.style.height = '110px';
+              img.style.objectFit = 'cover';
+              img.style.border = '1px solid #e2e8f0';
+              img.style.borderRadius = '8px';
+              img.style.background = '#f8fafc';
+              preview.appendChild(img);
+            };
+            reader.readAsDataURL(f);
+          });
+        });
+      }
     })();
   </script>
 </body>
