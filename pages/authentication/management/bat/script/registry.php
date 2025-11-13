@@ -51,6 +51,11 @@ if ($_FILES['supporting_doc']['size'] > 20 * 1024 * 1024) {
     respond(400, 'File too large');
 }
 
+$email = trim($_POST['email']);
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(400, 'Invalid email format');
+}
+
 $SUPABASE_URL = getenv('SUPABASE_URL') ?: loadEnvValue('SUPABASE_URL');
 $SUPABASE_KEY = getenv('SUPABASE_SERVICE_ROLE_KEY') ?: loadEnvValue('SUPABASE_SERVICE_ROLE_KEY') ?: getenv('SUPABASE_KEY') ?: loadEnvValue('SUPABASE_KEY');
 if (!$SUPABASE_URL || !$SUPABASE_KEY){
@@ -62,40 +67,68 @@ $fn = trim($_POST['firstname']);
 $ln = trim($_POST['lastname']);
 $dup1 = rtrim($SUPABASE_URL,'/').'/rest/v1/reviewbat?select=user_id&user_fname=eq.'.rawurlencode($fn).'&user_lname=eq.'.rawurlencode($ln).'&limit=1';
 $dup2 = rtrim($SUPABASE_URL,'/').'/rest/v1/preapprovalbat?select=user_id&user_fname=eq.'.rawurlencode($fn).'&user_lname=eq.'.rawurlencode($ln).'&limit=1';
-foreach ([$dup1,$dup2] as $dupu){
+$mhD = curl_multi_init();
+$handlesD = [];
+foreach ([$dup1,$dup2] as $dupu) {
     $chD = curl_init();
-    curl_setopt($chD, CURLOPT_URL, $dupu);
-    curl_setopt($chD, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($chD, CURLOPT_HTTPHEADER, [ 'apikey: '.$SUPABASE_KEY, 'Authorization: Bearer '.$SUPABASE_KEY, 'Accept: application/json' ]);
-    $dr = curl_exec($chD);
+    curl_setopt_array($chD, [
+        CURLOPT_URL => $dupu,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_HTTPHEADER => [ 'apikey: '.$SUPABASE_KEY, 'Authorization: Bearer '.$SUPABASE_KEY, 'Accept: application/json' ],
+    ]);
+    $handlesD[] = $chD;
+    curl_multi_add_handle($mhD, $chD);
+}
+do { $status = curl_multi_exec($mhD, $running); if ($running) curl_multi_select($mhD); } while ($running && $status == CURLM_OK);
+foreach ($handlesD as $chD) {
     $dh = curl_getinfo($chD, CURLINFO_HTTP_CODE);
-    curl_close($chD);
+    $dr = curl_multi_getcontent($chD);
     if ($dh>=200 && $dh<300) {
         $arr = json_decode($dr, true);
-        if (is_array($arr) && count($arr)>0) { respond(409, 'A BAT with the same first and last name already exists.'); }
+        if (is_array($arr) && count($arr)>0) { curl_multi_remove_handle($mhD, $chD); curl_close($chD); curl_multi_close($mhD); respond(409, 'A BAT with the same first and last name already exists.'); }
     }
+    curl_multi_remove_handle($mhD, $chD);
+    curl_close($chD);
 }
+curl_multi_close($mhD);
 
 // Supabase Auth signup to trigger email confirmation
 $APP_URL = getenv('APP_URL') ?: loadEnvValue('APP_URL');
 $redirectTo = ($APP_URL ? rtrim($APP_URL, '/') : '') . '/pages/authentication/loginpage.php?confirmed=1';
 $authUrl = rtrim($SUPABASE_URL, '/') . '/auth/v1/signup?redirect_to=' . urlencode($redirectTo);
+$ANON_KEY = getenv('SUPABASE_ANON_KEY') ?: loadEnvValue('SUPABASE_ANON_KEY') ?: getenv('SUPABASE_KEY') ?: loadEnvValue('SUPABASE_KEY');
+if (!$ANON_KEY) { respond(500, 'Supabase anon key missing'); }
 $uname = trim($_POST['username']);
-// Username uniqueness across all roles
+// Username uniqueness across all roles (parallel)
 $unameTables = ['reviewbuyer','buyer','reviewseller','seller','reviewbat','preapprovalbat','reviewadmin','admin','superadmin'];
+$mhU = curl_multi_init();
+$handlesU = [];
 foreach ($unameTables as $tbl) {
     $uurl = rtrim($SUPABASE_URL,'/').'/rest/v1/'.$tbl.'?select=username&username=eq.'.rawurlencode($uname).'&limit=1';
     $chU = curl_init();
-    curl_setopt($chU, CURLOPT_URL, $uurl);
-    curl_setopt($chU, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($chU, CURLOPT_HTTPHEADER, [ 'apikey: '.$SUPABASE_KEY, 'Authorization: Bearer '.$SUPABASE_KEY, 'Accept: application/json' ]);
-    $ur = curl_exec($chU);
-    $uh = curl_getinfo($chU, CURLINFO_HTTP_CODE);
-    curl_close($chU);
-    if ($uh>=200 && $uh<300) { $ua = json_decode($ur, true); if (is_array($ua) && count($ua)>0) { respond(409, 'Username already taken. Please choose another.'); } }
+    curl_setopt_array($chU, [
+        CURLOPT_URL => $uurl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_HTTPHEADER => [ 'apikey: '.$SUPABASE_KEY, 'Authorization: Bearer '.$SUPABASE_KEY, 'Accept: application/json' ],
+    ]);
+    $handlesU[] = $chU;
+    curl_multi_add_handle($mhU, $chU);
 }
+do { $status = curl_multi_exec($mhU, $running); if ($running) curl_multi_select($mhU); } while ($running && $status == CURLM_OK);
+foreach ($handlesU as $chU) {
+    $uh = curl_getinfo($chU, CURLINFO_HTTP_CODE);
+    $ur = curl_multi_getcontent($chU);
+    if ($uh>=200 && $uh<300) { $ua = json_decode($ur, true); if (is_array($ua) && count($ua)>0) { curl_multi_remove_handle($mhU, $chU); curl_close($chU); curl_multi_close($mhU); respond(409, 'Username already taken. Please choose another.'); } }
+    curl_multi_remove_handle($mhU, $chU);
+    curl_close($chU);
+}
+curl_multi_close($mhU);
 $authPayload = json_encode([
-    'email' => $_POST['email'],
+    'email' => $email,
     'password' => $_POST['password'],
     'data' => [
         'username' => $_POST['username']
@@ -105,8 +138,8 @@ $chAuth = curl_init();
 curl_setopt($chAuth, CURLOPT_URL, $authUrl);
 curl_setopt($chAuth, CURLOPT_POST, true);
 curl_setopt($chAuth, CURLOPT_HTTPHEADER, [
-    'apikey: ' . $SUPABASE_KEY,
-    'Authorization: Bearer ' . $SUPABASE_KEY,
+    'apikey: ' . $ANON_KEY,
+    'Authorization: Bearer ' . $ANON_KEY,
     'Content-Type: application/json',
     'Accept: application/json'
 ]);
@@ -145,7 +178,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'apikey: '.$SUPABASE_KEY,
     'Authorization: Bearer '.$SUPABASE_KEY,
     'Content-Type: application/json',
-    'Prefer: return=representation'
+    'Prefer: return=minimal'
 ]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([$payload]));
@@ -159,17 +192,6 @@ if ($err) {
 if ($http < 200 || $http >= 300){
     respond($http, 'Supabase REST HTTP '.$http.': '.$res);
 }
-$data = json_decode($res, true);
-if (!is_array($data) || !isset($data[0])){
-    respond(500, 'Unexpected Supabase REST response');
-}
-$row = $data[0];
-$created = isset($row['created']) ? $row['created'] : null;
-if (!$created) {
-    respond(500, 'No created timestamp returned');
-}
-$createdTs = strtotime($created);
-$createdStr = $createdTs ? date('YmdHis', $createdTs) : preg_replace('/[^0-9]/','',$created);
 
 $fname = isset($_POST['firstname']) ? $_POST['firstname'] : '';
 $mname = isset($_POST['middlename']) ? $_POST['middlename'] : '';
@@ -207,6 +229,9 @@ curl_setopt($ch2, CURLOPT_HTTPHEADER, [
 ]);
 curl_setopt($ch2, CURLOPT_INFILE, $fp);
 curl_setopt($ch2, CURLOPT_INFILESIZE, $contentLength);
+$curlTimeout = 120;
+curl_setopt($ch2, CURLOPT_CONNECTTIMEOUT, 10);
+curl_setopt($ch2, CURLOPT_TIMEOUT, $curlTimeout);
 curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
 $res2 = curl_exec($ch2);
 $http2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);

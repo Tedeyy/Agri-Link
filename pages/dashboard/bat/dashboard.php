@@ -40,9 +40,6 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
             <div>
                 <h1>BAT Dashboard</h1>
             </div>
-            <div>
-                <a>Logout</a>
-            </div>
         </div>
         <div class="card">
             <p>Use this space to validate accounts and assist administrative tasks.</p>

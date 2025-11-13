@@ -31,6 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$error) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Invalid email format.';
+        }
+    }
+
+    if (!$error) {
         [$dupr,$dups,$dupe] = sb_rest('GET', 'superadmin', [
           'select' => 'user_id',
           'user_fname' => 'eq.'.$first,

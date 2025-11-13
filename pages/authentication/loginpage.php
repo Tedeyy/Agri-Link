@@ -32,7 +32,7 @@ $cooldown = isset($_GET['cooldown']) ? max(0, (int)$_GET['cooldown']) : 0;
             <?php endif; ?>
             
             <div class="form-group">
-                <label for="username">Username:</label>
+                <label for="username">Username</label>
                 <input type="text" id="username" name="username" required>
             </div>
             

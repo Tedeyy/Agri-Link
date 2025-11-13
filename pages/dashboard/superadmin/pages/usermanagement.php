@@ -115,7 +115,7 @@ if (isset($_GET['decide'])){
   $payload = [];
   if ($action === 'approve'){
     if ($role === 'admin'){
-      $payload = [[
+      $payloadRow = [
         'user_fname' => $row['user_fname'] ?? '',
         'user_mname' => $row['user_mname'] ?? '',
         'user_lname' => $row['user_lname'] ?? '',
@@ -130,9 +130,11 @@ if (isset($_GET['decide'])){
         'username' => $row['username'] ?? '',
         'password' => $row['password'] ?? '',
         'superadmin_id' => $superadmin_id
-      ]];
+      ];
+      if (isset($row['created']) && $row['created'] !== '') { $payloadRow['created'] = $row['created']; }
+      $payload = [ $payloadRow ];
     } else { // bat
-      $payload = [[
+      $payloadRow = [
         'user_fname' => $row['user_fname'] ?? '',
         'user_mname' => $row['user_mname'] ?? '',
         'user_lname' => $row['user_lname'] ?? '',
@@ -147,7 +149,9 @@ if (isset($_GET['decide'])){
         'password' => $row['password'] ?? '',
         'admin_id' => $row['admin_id'] ?? null,
         'superadmin_id' => $superadmin_id
-      ]];
+      ];
+      if (isset($row['created']) && $row['created'] !== '') { $payloadRow['created'] = $row['created']; }
+      $payload = [ $payloadRow ];
     }
   }
 
