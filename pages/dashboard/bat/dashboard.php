@@ -49,20 +49,6 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
         </div>
         <div id="geoStatus" style="margin-top:8px;color:#4a5568;font-size:14px"></div>
     </div>
-    <script>
-    (function(){
-      if (!('geolocation' in navigator)) { return; }
-      var statusEl = document.getElementById('geoStatus');
-      function setStatus(msg){ if (statusEl) statusEl.textContent = msg; }
-      navigator.geolocation.getCurrentPosition(function(pos){
-        var lat = pos.coords.latitude; var lng = pos.coords.longitude;
-        setStatus('Your location: ' + lat.toFixed(6) + ', ' + lng.toFixed(6));
-        var fd = new FormData(); fd.append('lat', lat); fd.append('lng', lng);
-        fetch('../update_location.php', { method:'POST', body: fd, credentials:'same-origin' }).catch(function(){});
-      }, function(){
-        setStatus('Location access denied or unavailable.');
-      }, { enableHighAccuracy:true, timeout:10000, maximumAge:300000 });
-    })();
-    </script>
+    <script src="script/dashboard.js"></script>
 </body>
 </html>

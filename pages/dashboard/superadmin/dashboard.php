@@ -39,10 +39,12 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
                 <input type="search" name="q" placeholder="Search" />
             </form>
         </div>
-        <div class="nav-right">
-            <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?></div>
+        <div class="nav-center" style="display:flex;gap:16px;align-items:center;">
             <a class="btn" href="pages/generatereports.php">Generate Report</a>
             <a class="btn" href="pages/logs.php">Logs</a>
+        </div>
+        <div class="nav-right">
+            <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?></div>
             <a class="btn" href="../logout.php">Logout</a>
             <a class="profile" href="pages/profile.php" aria-label="Profile">
                 <span class="avatar">👤</span>
@@ -74,35 +76,7 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
 
         <div class="card">
             <h3>Service Coverage Map</h3>
-            <div id="map" class="mapbox" aria-label="Map placeholder">
-              <script>
-              (function(){
-                if (!window.L) return;
-                var mapEl = document.getElementById('map');
-                if (!mapEl) return;
-                var map = L.map(mapEl).setView([8.314209 , 124.859425], 14);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                  maxZoom: 19,
-                  attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(map);
-                window.superadminMap = map;
-              })();
-              </script>
-            </div>
-            <script>
-            (function(){
-              if (!('geolocation' in navigator)) { return; }
-              navigator.geolocation.getCurrentPosition(function(pos){
-                var lat = pos.coords.latitude; var lng = pos.coords.longitude;
-                try {
-                  if (window.superadminMap && window.L){
-                    window.superadminMap.setView([lat, lng], 15);
-                    L.marker([lat, lng]).addTo(window.superadminMap);
-                  }
-                } catch(e){}
-              }, function(err){}, { enableHighAccuracy:true, timeout:10000, maximumAge:300000 });
-            })();
-            </script>
+            <div id="map" class="mapbox" aria-label="Map placeholder"></div>
         </div>
 
         <div class="card">
@@ -137,4 +111,5 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
         </div>
     </div>
 </body>
+<script src="script/dashboard.js"></script>
 </html>

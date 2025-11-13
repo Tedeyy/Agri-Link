@@ -107,24 +107,9 @@ foreach ($typeNames as $i=>$tn){
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script>
-    (function(){
-      var el = document.getElementById('adminSalesChart');
-      if (!el || !window.Chart) return;
-      var labels = <?php echo json_encode($labels); ?>;
-      var datasets = <?php echo json_encode($datasets); ?>;
-      new Chart(el, {
-        type: 'line',
-        data: { labels: labels, datasets: datasets },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: { legend: { position: 'bottom' } },
-          scales: { y: { beginAtZero: true, suggestedMin: 0 } }
-        }
-      });
-    })();
-    </script>
-</body>
+    <div id="admin-sales-data"
+         data-labels='<?php echo json_encode($labels, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>'
+         data-datasets='<?php echo json_encode($datasets, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>'></div>
+    <script src="script/dashboard.js"></script>
+  </body>
 </html>
