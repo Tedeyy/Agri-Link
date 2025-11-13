@@ -72,6 +72,7 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
                     <div style="font-size:20px;font-weight:600;"><?php echo (int)$reviewAdminCount; ?></div>
                 </div>
             </div>
+            <a class="btn" href="pages/usermanagement.php" style="margin-top:8px;display:inline-block;">Manage</a>
         </div>
 
         <div class="card">
