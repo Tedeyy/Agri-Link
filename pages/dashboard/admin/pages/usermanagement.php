@@ -78,6 +78,218 @@ if (isset($_GET['doc']) && $_GET['doc'] === '1'){
   exit;
 }
 
+// Inline endpoint to approve or deny a user
+if (isset($_GET['decide'])){
+  header('Content-Type: application/json');
+  $action = $_GET['decide'];
+  if (!in_array($action, ['approve','deny'], true)) { echo json_encode(['ok'=>false,'error'=>'invalid action']); exit; }
+  $raw = file_get_contents('php://input');
+  $req = json_decode($raw, true);
+  if (!is_array($req)) { echo json_encode(['ok'=>false,'error'=>'invalid body']); exit; }
+  $role = $req['role'] ?? '';
+  $id = $req['id'] ?? null;
+  $fname = $req['fname'] ?? '';
+  $mname = $req['mname'] ?? '';
+  $lname = $req['lname'] ?? '';
+  $email = $req['email'] ?? '';
+  $created = $req['created'] ?? '';
+  if (!in_array($role, ['buyer','seller','bat'], true)) { echo json_encode(['ok'=>false,'error'=>'invalid role']); exit; }
+  if (!is_numeric($id)) { echo json_encode(['ok'=>false,'error'=>'missing id']); exit; }
+  $admin_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : (isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : null);
+  if (!$admin_id) { echo json_encode(['ok'=>false,'error'=>'no admin id in session']); exit; }
+
+  $srcTable = $role === 'buyer' ? 'reviewbuyer' : ($role === 'seller' ? 'reviewseller' : 'reviewbat');
+  $destTable = null;
+  if ($action === 'approve'){
+    $destTable = $role === 'buyer' ? 'buyer' : ($role === 'seller' ? 'seller' : 'preapprovalbat');
+  } else {
+    $destTable = 'denieduser';
+  }
+
+  // Fetch source row
+  [$rows,$st,$er] = sb_rest('GET', $srcTable, ['select'=>'*','user_id'=>'eq.'.$id]);
+  if (!($st>=200 && $st<300 && is_array($rows) && count($rows)===1)){
+    $detail = is_array($rows)? json_encode($rows) : (string)$rows;
+    echo json_encode(['ok'=>false,'error'=>'source fetch failed (http '.$st.')','detail'=>$detail]); exit;
+  }
+  $row = $rows[0];
+
+  // Build destination payload
+  $payload = [];
+  if ($action === 'approve'){
+    if ($role === 'buyer'){
+      $payload = [[
+        'user_fname' => $row['user_fname'] ?? '',
+        'user_mname' => $row['user_mname'] ?? '',
+        'user_lname' => $row['user_lname'] ?? '',
+        'bdate' => $row['bdate'] ?? '',
+        'contact' => $row['contact'] ?? '',
+        'address' => $row['address'] ?? '',
+        'barangay' => $row['barangay'] ?? '',
+        'municipality' => $row['municipality'] ?? '',
+        'province' => $row['province'] ?? '',
+        'email' => $row['email'] ?? '',
+        'doctype' => $row['doctype'] ?? '',
+        'docnum' => $row['docnum'] ?? '',
+        'username' => $row['username'] ?? '',
+        'password' => $row['password'] ?? '',
+        'admin_id' => $admin_id
+      ]];
+    } elseif ($role === 'seller') {
+      $payload = [[
+        'user_fname' => $row['user_fname'] ?? '',
+        'user_mname' => $row['user_mname'] ?? '',
+        'user_lname' => $row['user_lname'] ?? '',
+        'bdate' => $row['bdate'] ?? '',
+        'contact' => $row['contact'] ?? '',
+        'address' => $row['address'] ?? '',
+        'barangay' => $row['barangay'] ?? '',
+        'municipality' => $row['municipality'] ?? '',
+        'province' => $row['province'] ?? '',
+        'email' => $row['email'] ?? '',
+        'rsbsanum' => $row['rsbsanum'] ?? '',
+        'doctype' => $row['doctype'] ?? '',
+        'docnum' => $row['docnum'] ?? '',
+        'username' => $row['username'] ?? '',
+        'password' => $row['password'] ?? '',
+        'admin_id' => $admin_id
+      ]];
+    } else { // bat -> preapprovalbat
+      $payload = [[
+        'user_fname' => $row['user_fname'] ?? '',
+        'user_mname' => $row['user_mname'] ?? '',
+        'user_lname' => $row['user_lname'] ?? '',
+        'bdate' => $row['bdate'] ?? '',
+        'contact' => $row['contact'] ?? '',
+        'address' => $row['address'] ?? '',
+        'email' => $row['email'] ?? '',
+        'assigned_barangay' => $row['assigned_barangay'] ?? ($row['barangay'] ?? ''),
+        'doctype' => $row['doctype'] ?? '',
+        'docnum' => $row['docnum'] ?? '',
+        'username' => $row['username'] ?? '',
+        'password' => $row['password'] ?? '',
+        'admin_id' => $admin_id
+      ]];
+    }
+  } else { // deny -> denieduser
+    $payload = [[
+      'user_fname' => $row['user_fname'] ?? '',
+      'user_mname' => $row['user_mname'] ?? '',
+      'user_lname' => $row['user_lname'] ?? '',
+      'bdate' => $row['bdate'] ?? '',
+      'contact' => $row['contact'] ?? '',
+      'address' => $row['address'] ?? '',
+      'barangay' => $row['barangay'] ?? ($row['assigned_barangay'] ?? ''),
+      'municipality' => $row['municipality'] ?? '',
+      'province' => $row['province'] ?? '',
+      'email' => $row['email'] ?? '',
+      'doctype' => $row['doctype'] ?? '',
+      'docnum' => $row['docnum'] ?? '',
+      'username' => $row['username'] ?? '',
+      'password' => $row['password'] ?? '',
+      'role' => $role,
+      'admin_id' => $admin_id
+    ]];
+  }
+
+  [$ires,$ist,$ier] = sb_rest('POST', $destTable, [], $payload, ['Prefer: return=representation']);
+  if (!($ist>=200 && $ist<300)){
+    $detail = is_array($ires)? json_encode($ires) : (string)$ires;
+    echo json_encode(['ok'=>false,'error'=>'insert failed (http '.$ist.')','detail'=>$detail]); exit;
+  }
+
+  // Try to locate and move/copy image
+  $base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
+  $key = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: (getenv('SUPABASE_KEY') ?: ''));
+  $listPrefix = $role.'/';
+  $listUrl = rtrim($base,'/').'/storage/v1/object/list/reviewusers';
+  $fullname = trim(($fname).' '.($mname?:'').' '.($lname));
+  $san = strtolower(preg_replace('/[^a-z0-9]+/i','_', $fullname));
+  $san = trim($san, '_');
+  $esan = strtolower(preg_replace('/[^a-z0-9]+/i','_', $email));
+  $esan = trim($esan, '_');
+  $expectedEmailBase = ($san !== '' ? $san : 'user').'_'.$esan;
+  $createdStr = preg_replace('/[^0-9]/','', $created);
+  if ($createdStr==='') { $t=strtotime($created); $createdStr = $t? date('YmdHis',$t) : ''; }
+  $expectedCreatedBase = ($san !== '' ? $san : 'user').'_'.$createdStr;
+  $objectName = null;
+  $ch = curl_init();
+  curl_setopt_array($ch,[
+    CURLOPT_URL => $listUrl,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [ 'apikey: '.$key, 'Authorization: Bearer '.$key, 'Content-Type: application/json' ],
+    CURLOPT_POSTFIELDS => json_encode(['prefix'=>$listPrefix])
+  ]);
+  $listRaw = curl_exec($ch);
+  $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  if ($http>=200 && $http<300){
+    $items = json_decode($listRaw, true);
+    if (is_array($items)){
+      foreach ($items as $it){ $name = $it['name'] ?? ''; if ($name!=='' && $esan!=='' && strpos($name, $expectedEmailBase)===0){ $objectName = $listPrefix.$name; break; } }
+      if (!$objectName && $createdStr!==''){
+        foreach ($items as $it){ $name = $it['name'] ?? ''; if ($name!=='' && strpos($name, $expectedCreatedBase)===0){ $objectName = $listPrefix.$name; break; } }
+      }
+    }
+  }
+
+  $moved = false;
+  if ($objectName){
+    // Download from reviewusers/<objectName>
+    $srcUrl = rtrim($base,'/').'/storage/v1/object/reviewusers/'.rawurlencode($objectName);
+    $chd = curl_init();
+    curl_setopt_array($chd,[
+      CURLOPT_URL => $srcUrl,
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_HTTPHEADER => [ 'apikey: '.$key, 'Authorization: Bearer '.$key ]
+    ]);
+    $bytes = curl_exec($chd);
+    $httpd = curl_getinfo($chd, CURLINFO_HTTP_CODE);
+    curl_close($chd);
+    if ($httpd>=200 && $httpd<300 && $bytes !== false){
+      $destBucket = $action === 'approve' ? 'users' : 'deniedusers';
+      $destPath = $role.'/'.basename($objectName);
+      $upUrl = rtrim($base,'/').'/storage/v1/object/'.$destBucket.'/'.$destPath;
+      $chu = curl_init();
+      curl_setopt_array($chu,[
+        CURLOPT_URL => $upUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_HTTPHEADER => [ 'apikey: '.$key, 'Authorization: Bearer '.$key, 'Content-Type: application/octet-stream', 'x-upsert: true' ],
+        CURLOPT_POSTFIELDS => $bytes
+      ]);
+      $upr = curl_exec($chu);
+      $uph = curl_getinfo($chu, CURLINFO_HTTP_CODE);
+      curl_close($chu);
+      if ($uph>=200 && $uph<300){
+        // Remove source file to emulate move
+        $rmUrl = rtrim($base,'/').'/storage/v1/object/reviewusers/'.rawurlencode($objectName);
+        $chr = curl_init();
+        curl_setopt_array($chr,[
+          CURLOPT_URL => $rmUrl,
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_CUSTOMREQUEST => 'DELETE',
+          CURLOPT_HTTPHEADER => [ 'apikey: '.$key, 'Authorization: Bearer '.$key ]
+        ]);
+        $rmr = curl_exec($chr);
+        $rmh = curl_getinfo($chr, CURLINFO_HTTP_CODE);
+        curl_close($chr);
+        $moved = ($rmh>=200 && $rmh<300);
+      }
+    }
+  }
+
+  // Delete source review row
+  [$dr,$dh,$de] = sb_rest('DELETE', $srcTable, ['user_id'=>'eq.'.$id]);
+  if (!($dh>=200 && $dh<300)){
+    echo json_encode(['ok'=>false,'error'=>'cleanup failed (http '.$dh.')']); exit;
+  }
+
+  echo json_encode(['ok'=>true,'moved'=>$moved]);
+  exit;
+}
+
 $buyers = []; $sellers = []; $bats = [];
 [$br,$bs,$be] = sb_rest('GET','reviewbuyer',['select'=>'*']); if ($bs>=200 && $bs<300 && is_array($br)) $buyers=$br;
 [$sr,$ss,$se] = sb_rest('GET','reviewseller',['select'=>'*']); if ($ss>=200 && $ss<300 && is_array($sr)) $sellers=$sr;
@@ -164,6 +376,13 @@ $buyers = []; $sellers = []; $bats = [];
         <div id="docStatus" style="color:#6b7280;font-size:14px">Loading document...</div>
         <div id="docPreview" style="margin-top:8px"></div>
       </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px">
+        <div style="display:flex;gap:8px">
+          <button id="approveBtn" class="btn" style="background:#10b981;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer">Approve</button>
+          <button id="denyBtn" class="btn" style="background:#ef4444;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer">Deny</button>
+        </div>
+        <div id="actionStatus" style="font-size:14px;color:#374151"></div>
+      </div>
     </div>
   </div>
 
@@ -183,6 +402,10 @@ $buyers = []; $sellers = []; $bats = [];
     function row(label, val){ return '<div class="row"><div class="label">'+label+'</div><div>'+val+'</div></div>'; }
     var modal = document.getElementById('detailModal');
     var close = document.getElementById('closeModal');
+    var approveBtn = document.getElementById('approveBtn');
+    var denyBtn = document.getElementById('denyBtn');
+    var actionStatus = document.getElementById('actionStatus');
+    var current = { role:null, data:null, tr:null, ds:null };
     close.addEventListener('click', function(){ modal.style.display='none'; });
     modal.addEventListener('click', function(e){ if (e.target===modal) modal.style.display='none'; });
 
@@ -212,13 +435,46 @@ $buyers = []; $sellers = []; $bats = [];
       }).catch(function(){ s.textContent='Failed to load document.'; });
     }
 
+    function setButtons(enabled){ approveBtn.disabled = !enabled; denyBtn.disabled = !enabled; }
+    function submitDecision(action){
+      if (!current || !current.data){ return; }
+      setButtons(false);
+      actionStatus.textContent = 'Processing...';
+      var body = {
+        role: current.role,
+        id: current.data.user_id,
+        fname: current.ds.fname,
+        mname: current.ds.mname,
+        lname: current.ds.lname,
+        email: current.ds.email,
+        created: current.ds.created
+      };
+      fetch('usermanagement.php?decide='+encodeURIComponent(action), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function(r){ return r.json(); }).then(function(j){
+        if (!j || !j.ok){ actionStatus.textContent = 'Failed: '+((j&&j.error)||''); setButtons(true); return; }
+        actionStatus.textContent = 'Success';
+        if (current.tr && current.tr.parentNode){ current.tr.parentNode.removeChild(current.tr); }
+        setTimeout(function(){ actionStatus.textContent=''; modal.style.display='none'; }, 400);
+      }).catch(function(){ actionStatus.textContent = 'Failed'; setButtons(true); });
+    }
+
+    if (approveBtn){ approveBtn.addEventListener('click', function(){ submitDecision('approve'); }); }
+    if (denyBtn){ denyBtn.addEventListener('click', function(){ submitDecision('deny'); }); }
+
     document.querySelectorAll('.show').forEach(function(btn){ btn.addEventListener('click', function(){
       var role = btn.dataset.role;
       var data = {};
       try { data = JSON.parse(btn.dataset.json); } catch(e){}
       document.getElementById('modalTitle').textContent = (data.user_fname||'')+' '+(data.user_lname||'');
       renderDetails(data, role);
-      loadDoc(role, btn.dataset.fname||'', btn.dataset.mname||'', btn.dataset.lname||'', btn.dataset.created||'', btn.dataset.email||'');
+      var ds = { fname: btn.dataset.fname||'', mname: btn.dataset.mname||'', lname: btn.dataset.lname||'', created: btn.dataset.created||'', email: btn.dataset.email||'' };
+      current = { role: role, data: data, tr: btn.closest('tr'), ds: ds };
+      setButtons(true);
+      actionStatus.textContent = '';
+      loadDoc(role, ds.fname, ds.mname, ds.lname, ds.created, ds.email);
       modal.style.display='flex';
     }); });
   })();
