@@ -43,6 +43,10 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
         </div>
         <div class="card">
             <p>Use this space to validate accounts and assist administrative tasks.</p>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                <a class="btn" href="pages/review_listings.php">Review Listings</a>
+                <a class="btn" href="pages/calendar.php">Calendar</a>
+            </div>
         </div>
         <div id="geoStatus" style="margin-top:8px;color:#4a5568;font-size:14px"></div>
     </div>

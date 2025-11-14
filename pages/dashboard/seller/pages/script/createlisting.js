@@ -39,6 +39,14 @@ document.addEventListener('DOMContentLoaded', function(){
       fileInput.addEventListener('change', function(){
         while (preview.firstChild) preview.removeChild(preview.firstChild);
         var files = Array.prototype.slice.call(fileInput.files || []);
+        if (files.length > 3){
+          alert('You can upload up to 3 images only.');
+          // Keep only first 3 images by creating a new DataTransfer
+          var dt = new DataTransfer();
+          files.slice(0,3).forEach(function(f){ dt.items.add(f); });
+          fileInput.files = dt.files;
+          files = files.slice(0,3);
+        }
         files.forEach(function(f){
           if (!f.type || !f.type.startsWith('image/')) return;
           var reader = new FileReader();

@@ -74,7 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       'address' => $address,
       'age' => (int)$age,
       'weight' => (float)$weight,
-      'price' => (float)$price
+      'price' => (float)$price,
+      'status' => 'pending'
     ]];
     [$lres, $lstatus, $lerr] = sb_rest('POST', 'livestocklisting_logs', [], $logPayload, ['Prefer: return=representation']);
     if (!($lstatus >= 200 && $lstatus < 300)) {
@@ -99,45 +100,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // 3) Upload photos to storage bucket path listings/underreview/<seller_id>_<listing_id>_<created>/
         if ($listingId && isset($_FILES['photos']) && is_array($_FILES['photos']['name'])){
-          $base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
-          $service = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
-          $auth = $_SESSION['supa_access_token'] ?? ($service ?: (getenv('SUPABASE_KEY') ?: ''));
-          $stamp = $createdAt ? date('YmdHis', strtotime($createdAt)) : date('YmdHis');
-          $folder = ((int)$seller_id).'_'.((int)$listingId).'_'.$stamp;
-          $bucketPathPrefix = rtrim($base,'/').'/storage/v1/object/listings/underreview/'.$folder.'/';
-          $count = count($_FILES['photos']['name']);
-          for ($i=0; $i<$count; $i++){
-            if ($_FILES['photos']['error'][$i] !== UPLOAD_ERR_OK) continue;
-            $tmp = $_FILES['photos']['tmp_name'][$i];
-            $orig = $_FILES['photos']['name'][$i];
-            $ext = pathinfo($orig, PATHINFO_EXTENSION);
-            $fname = uniqid('img_', true).($ext?('.'.$ext):'');
-            $pathUrl = $bucketPathPrefix.$fname;
-            $mime = mime_content_type($tmp) ?: 'application/octet-stream';
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-              CURLOPT_URL => $pathUrl,
-              CURLOPT_RETURNTRANSFER => true,
-              CURLOPT_CUSTOMREQUEST => 'POST',
-              CURLOPT_HTTPHEADER => [
-                'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
-                'Authorization: Bearer '.$auth,
-                'Content-Type: '.$mime,
-                'x-upsert: true'
-              ],
-              CURLOPT_POSTFIELDS => file_get_contents($tmp)
-            ]);
-            $upRes = curl_exec($ch);
-            $upCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $upErr = curl_error($ch);
-            curl_close($ch);
-            if ($upCode>=200 && $upCode<300){ $uploadedInfo[] = $fname; }
+          $validFiles = [];
+          $total = count($_FILES['photos']['name']);
+          for ($i=0; $i<$total; $i++){
+            if ($_FILES['photos']['error'][$i] === UPLOAD_ERR_OK){
+              $validFiles[] = [
+                'tmp' => $_FILES['photos']['tmp_name'][$i],
+                'name' => $_FILES['photos']['name'][$i]
+              ];
+            }
+          }
+          if (count($validFiles) === 0){
+            $error = 'Please upload at least 1 image (up to 3).';
+          } else {
+            if (count($validFiles) > 3){ $validFiles = array_slice($validFiles, 0, 3); }
+            $base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
+            $service = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
+            $auth = $_SESSION['supa_access_token'] ?? ($service ?: (getenv('SUPABASE_KEY') ?: ''));
+            $folder = ((int)$effectiveSellerId).'_'.((int)$listingId);
+            $bucketPathPrefix = rtrim($base,'/').'/storage/v1/object/listings/underreview/'.$folder.'/';
+            $idx = 1;
+            foreach ($validFiles as $vf){
+              $tmp = $vf['tmp'];
+              $fname = 'image'.$idx; // no extension per requirement
+              $pathUrl = $bucketPathPrefix.$fname;
+              $mime = mime_content_type($tmp) ?: 'application/octet-stream';
+              $ch = curl_init();
+              curl_setopt_array($ch, [
+                CURLOPT_URL => $pathUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CUSTOMREQUEST => 'POST',
+                CURLOPT_HTTPHEADER => [
+                  'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
+                  'Authorization: Bearer '.$auth,
+                  'Content-Type: '.$mime,
+                  'x-upsert: true'
+                ],
+                CURLOPT_POSTFIELDS => file_get_contents($tmp)
+              ]);
+              $upRes = curl_exec($ch);
+              $upCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+              $upErr = curl_error($ch);
+              curl_close($ch);
+              if ($upCode>=200 && $upCode<300){ $uploadedInfo[] = $fname; }
+              $idx++;
+            }
           }
         }
 
-        $message = 'Listing submitted for review.'.(count($uploadedInfo)?(' Uploaded '.count($uploadedInfo).' image(s).'):'');
-        // Reset POST fields after success
-        $_POST = [];
+        if (!$error){
+          $message = 'Listing submitted for review.'.(count($uploadedInfo)?(' Uploaded '.count($uploadedInfo).' image(s).'):'');
+          // Reset POST fields after success
+          $_POST = [];
+        }
       } else {
         $error = 'Failed to submit listing to review (status '.strval($istatus).').';
       }

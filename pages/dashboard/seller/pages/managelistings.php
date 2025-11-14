@@ -51,7 +51,7 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting','deniedli
 
     <div class="card">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <a class="btn" href="?tab=review" style="background:<?php echo $tab==='review'?'#d69e2e':'#718096'; ?>">Review</a>
+        <a class="btn" href="?tab=review" style="background:<?php echo $tab==='review'?'#d69e2e':'#718096'; ?>">Pendings</a>
         <a class="btn" href="?tab=active" style="background:<?php echo $tab==='active'?'#d69e2e':'#718096'; ?>">Active</a>
         <a class="btn" href="?tab=sold" style="background:<?php echo $tab==='sold'?'#d69e2e':'#718096'; ?>">Sold</a>
         <a class="btn" href="?tab=denied" style="background:<?php echo $tab==='denied'?'#d69e2e':'#718096'; ?>">Denied</a>
