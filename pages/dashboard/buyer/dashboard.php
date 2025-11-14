@@ -1,6 +1,14 @@
 <?php
 session_start();
 $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_SESSION['firstname'] : 'User';
+// Compute verification status from role and source table
+$role = $_SESSION['role'] ?? '';
+$src  = $_SESSION['source_table'] ?? '';
+$isVerified = false;
+if ($role === 'buyer') {
+    $isVerified = ($src === 'buyer');
+}
+$statusLabel = $isVerified ? 'Verified' : 'Under review';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -20,7 +28,7 @@ $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_
             </form>
         </div>
         <div class="nav-right">
-            <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?></div>
+            <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></div>
             <a class="btn" href="../logout.php">Logout</a>
             <a class="profile" href="pages/profile.php" aria-label="Profile">
                 <span class="avatar">👤</span>
@@ -36,6 +44,8 @@ $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_
         <div class="card">
             <p>Discover products and manage your orders here.</p>
         </div>
+        <div id="geoStatus" style="margin-top:8px;color:#4a5568;font-size:14px"></div>
     </div>
+    <script src="script/dashboard.js"></script>
 </body>
 </html>

@@ -32,7 +32,7 @@ $cooldown = isset($_GET['cooldown']) ? max(0, (int)$_GET['cooldown']) : 0;
             <?php endif; ?>
             
             <div class="form-group">
-                <label for="username">Username:</label>
+                <label for="username">Username</label>
                 <input type="text" id="username" name="username" required>
             </div>
             
@@ -53,24 +53,7 @@ $cooldown = isset($_GET['cooldown']) ? max(0, (int)$_GET['cooldown']) : 0;
             </div>
         </form>
     </div>
-    <script>
-    (function(){
-      var btn = document.getElementById('login-btn');
-      var cd = <?php echo (int)$cooldown; ?>;
-      if (btn && cd > 0){
-        btn.disabled = true;
-        var span = document.getElementById('cooldown-secs');
-        var left = cd;
-        var timer = setInterval(function(){
-          left -= 1;
-          if (span) span.textContent = Math.max(0,left);
-          if (left <= 0){
-            clearInterval(timer);
-            btn.disabled = false;
-          }
-        }, 1000);
-      }
-    })();
-    </script>
+    <div id="login-data" data-cooldown="<?php echo (int)$cooldown; ?>" hidden></div>
+    <script src="script/loginpage.js"></script>
 </body>
 </html>

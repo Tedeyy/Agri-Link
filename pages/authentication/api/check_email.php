@@ -57,6 +57,8 @@ foreach ($tables as $t) {
     curl_setopt_array($ch, [
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => [
             'apikey: '.$SUPABASE_KEY,
             'Authorization: Bearer '.$SUPABASE_KEY,

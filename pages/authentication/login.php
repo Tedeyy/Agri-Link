@@ -1,103 +1,192 @@
 <?php
+// Enable output buffering for faster response
+define('LOGIN_ATTEMPT_LIMIT', 5);
+define('LOGIN_LOCKOUT_TIME', 300); // 5 minutes
+
+error_reporting(0); // Disable error display in production
 session_start();
 
 // Supabase auth helper (stores JWTs in $_SESSION for server-to-Supabase requests)
 require_once __DIR__ . '/lib/supabase_client.php';
 
-function loadEnvValue($key){
-    $dir = __DIR__;
-    for ($i=0; $i<6; $i++) {
-        $candidate = $dir.DIRECTORY_SEPARATOR.'.env';
-        if (is_file($candidate)) {
-            $lines = @file($candidate, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            if ($lines) {
-                foreach ($lines as $line) {
-                    if (strpos(ltrim($line), '#') === 0) continue;
-                    $pos = strpos($line, '=');
-                    if ($pos === false) continue;
-                    $k = trim(substr($line, 0, $pos));
-                    if ($k === $key) {
-                        $v = trim(substr($line, $pos+1));
+// Cache environment variables
+$envCache = [];
+
+function loadEnvValue($key) {
+    global $envCache;
+    if (isset($envCache[$key])) {
+        return $envCache[$key];
+    }
+    
+    $value = getenv($key);
+    if ($value !== false) {
+        $envCache[$key] = $value;
+        return $value;
+    }
+    
+    static $envLoaded = false;
+    static $envVars = [];
+    
+    if (!$envLoaded) {
+        $dir = __DIR__;
+        for ($i = 0; $i < 6; $i++) {
+            $candidate = $dir . DIRECTORY_SEPARATOR . '.env';
+            if (is_file($candidate)) {
+                $lines = @file($candidate, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                if ($lines) {
+                    foreach ($lines as $line) {
+                        $line = trim($line);
+                        if (empty($line) || strpos($line, '#') === 0) continue;
+                        
+                        $parts = explode('=', $line, 2);
+                        if (count($parts) !== 2) continue;
+                        
+                        $k = trim($parts[0]);
+                        $v = trim($parts[1]);
                         $v = trim($v, "\"' ");
-                        return $v;
+                        $envVars[$k] = $v;
                     }
+                    break;
                 }
             }
+            $parent = dirname($dir);
+            if ($parent === $dir) break;
+            $dir = $parent;
         }
-        $parent = dirname($dir);
-        if ($parent === $dir) break;
-        $dir = $parent;
+        $envLoaded = true;
     }
-    return null;
+    
+    $value = $envVars[$key] ?? null;
+    $envCache[$key] = $value;
+    return $value;
 }
 
-function redirect_with_error($msg){
-    $loc = 'loginpage.php?error='.urlencode($msg);
-    header('Location: '.$loc);
+function redirect_with_error($msg) {
+    http_response_code(302);
+    header('Location: loginpage.php?error=' . urlencode($msg));
     exit;
 }
 
-function redirect_with_error_and_cooldown($msg, $seconds){
-    if ($seconds < 0) { $seconds = 0; }
-    $loc = 'loginpage.php?error='.urlencode($msg).'&cooldown='.(int)$seconds;
-    header('Location: '.$loc);
+function redirect_with_error_and_cooldown($msg, $seconds) {
+    $seconds = max(0, (int)$seconds);
+    http_response_code(302);
+    header('Location: loginpage.php?error=' . urlencode($msg) . '&cooldown=' . $seconds);
     exit;
 }
 
-function client_ip(){
-    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+function client_ip() {
+    static $ip = null;
+    if ($ip !== null) return $ip;
+    
+    $ip = $_SERVER['HTTP_CF_CONNECTING_IP'] 
+        ?? $_SERVER['HTTP_X_FORWARDED_FOR'] 
+        ?? $_SERVER['REMOTE_ADDR'] 
+        ?? 'unknown';
+        
+    $ip = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6) ?: 'unknown';
     return substr($ip, 0, 100);
 }
 
+// Check request method and validate input
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect_with_error('Invalid request');
+    http_response_code(405);
+    exit('Method Not Allowed');
 }
 
-$username = isset($_POST['username']) ? trim($_POST['username']) : '';
-$password = isset($_POST['password']) ? (string)$_POST['password'] : '';
-if ($username === '' || $password === ''){
-    redirect_with_error('Missing username or password');
+// Basic input validation
+$username = trim($_POST['username'] ?? '');
+$password = (string)($_POST['password'] ?? '');
+
+if (empty($username) || empty($password)) {
+    redirect_with_error('Please enter both username/email and password');
 }
 
-$SUPABASE_URL = getenv('SUPABASE_URL') ?: loadEnvValue('SUPABASE_URL');
-$SUPABASE_KEY = getenv('SUPABASE_SERVICE_ROLE_KEY') ?: loadEnvValue('SUPABASE_SERVICE_ROLE_KEY') ?: getenv('SUPABASE_KEY') ?: loadEnvValue('SUPABASE_KEY');
-if (!$SUPABASE_URL || !$SUPABASE_KEY){
+// Load configuration
+$SUPABASE_URL = loadEnvValue('SUPABASE_URL');
+$SUPABASE_KEY = loadEnvValue('SUPABASE_SERVICE_ROLE_KEY') ?: loadEnvValue('SUPABASE_KEY');
+
+if (!$SUPABASE_URL || !$SUPABASE_KEY) {
+    error_log('Missing Supabase configuration');
     redirect_with_error('Server configuration error');
 }
 
-// Simple in-session throttle per username+IP
+// Initialize rate limiting
 $ip = client_ip();
 $_SESSION['login_fail'] = $_SESSION['login_fail'] ?? [];
-$key = $username.'|'.$ip;
+$key = hash('sha256', $username . '|' . $ip); // Use hashed key for security
 $now = time();
-$entry = $_SESSION['login_fail'][$key] ?? ['fails'=>0,'lock_until'=>0];
-if ($entry['lock_until'] > $now){
+$entry = $_SESSION['login_fail'][$key] ?? ['fails' => 0, 'lock_until' => 0];
+
+// Check if account is locked
+if ($entry['lock_until'] > $now) {
     $seconds = $entry['lock_until'] - $now;
-    redirect_with_error_and_cooldown('Too many failed attempts. Try again later.', $seconds);
+    redirect_with_error_and_cooldown('Too many failed attempts. Please try again in ' . $seconds . ' seconds.', $seconds);
 }
 
-function fetch_user_by_username($table, $username, $baseUrl, $apiKey){
-    $url = rtrim($baseUrl,'/').'/rest/v1/'.rawurlencode($table).'?select=*&username=eq.'.rawurlencode($username).'&limit=1';
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'apikey: '.$apiKey,
-            'Authorization: Bearer '.$apiKey,
-            'Accept: application/json',
-        ],
-    ]);
-    $res = curl_exec($ch);
-    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err = curl_error($ch);
-    curl_close($ch);
-    if ($err || $http >= 400) {
-        return null;
+/**
+ * Fetches a user by username or email using parallel cURL requests
+ */
+function fetch_user_by_credential($tables, $input, $baseUrl, $apiKey) {
+    $mh = curl_multi_init();
+    $handles = [];
+    $results = [];
+    $baseUrl = rtrim($baseUrl, '/');
+    
+    // Prepare all possible queries
+    foreach ($tables as $table) {
+        // Query for username
+        $url = "$baseUrl/rest/v1/" . rawurlencode($table) . 
+               "?select=*&or=(username.eq." . rawurlencode($input) . 
+               ",email.eq." . rawurlencode($input) . ")&limit=1";
+        
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_HTTPHEADER => [
+                'apikey: ' . $apiKey,
+                'Authorization: Bearer ' . $apiKey,
+                'Accept: application/json',
+                'Prefer: return=representation',
+            ],
+            CURLOPT_HTTPGET => true,
+        ]);
+        
+        $handles[] = $ch;
+        curl_multi_add_handle($mh, $ch);
     }
-    $data = json_decode($res, true);
-    if (is_array($data) && isset($data[0])) return $data[0];
-    return null;
+    
+    // Execute all queries in parallel
+    $running = null;
+    do {
+        $status = curl_multi_exec($mh, $running);
+        if ($running) {
+            curl_multi_select($mh);
+        }
+    } while ($running && $status == CURLM_OK);
+    
+    // Process responses
+    foreach ($handles as $ch) {
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($httpCode >= 200 && $httpCode < 300) {
+            $response = curl_multi_getcontent($ch);
+            $data = json_decode($response, true);
+            if (is_array($data) && !empty($data)) {
+                $result = $data[0];
+                $result['_table'] = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+                $result['_table'] = preg_replace('/.*\/rest\/v1\/([^?]+).*/', '$1', $result['_table']);
+                $results[] = $result;
+            }
+        }
+        curl_multi_remove_handle($mh, $ch);
+        curl_close($ch);
+    }
+    
+    curl_multi_close($mh);
+    
+    // Return the first valid result (prioritize by role order)
+    return $results[0] ?? null;
 }
 
 function insert_login_log($baseUrl, $apiKey, $userId, $ip, $userRole){
@@ -148,119 +237,162 @@ function insert_suspicious_log($baseUrl, $apiKey, $username, $ip){
     curl_close($ch);
 }
 
-// Priority: prefer approved tables over review/preapproval when both exist
+// Define user groups with priority order
 $groups = [
     'superadmin' => ['superadmin'],
-    'buyer'      => ['buyer','reviewbuyer'],
-    'seller'     => ['seller','reviewseller'],
-    'admin'      => ['admin','reviewadmin'],
-    'bat'        => ['bat','preapprovalbat','reviewbat'],
+    'admin'      => ['admin', 'reviewadmin'],
+    'bat'        => ['bat', 'preapprovalbat', 'reviewbat'],
+    'seller'     => ['seller', 'reviewseller'],
+    'buyer'      => ['buyer', 'reviewbuyer'],
 ];
 
-$found = null;
+// Fetch user data across all tables in parallel
+$allTables = [];
+foreach ($groups as $tables) {
+    $allTables = array_merge($allTables, $tables);
+}
+
+$found = fetch_user_by_credential($allTables, $username, $SUPABASE_URL, $SUPABASE_KEY);
 $role = null;
-$table_found = null;
-foreach ($groups as $roleKey => $tables){
-    foreach ($tables as $t){
-        $row = fetch_user_by_username($t, $username, $SUPABASE_URL, $SUPABASE_KEY);
-        if ($row){
-            $found = $row;
+$table_found = $found['_table'] ?? null;
+unset($found['_table']);
+
+// Determine role based on the table found
+if ($table_found) {
+    foreach ($groups as $roleKey => $tables) {
+        if (in_array($table_found, $tables)) {
             $role = $roleKey;
-            $table_found = $t;
-            break 2;
+            break;
         }
     }
 }
 
-if (!$found){
-    // failed attempt handling
+// Handle failed login attempts
+if (!$found || !isset($found['password'])) {
     $entry['fails'] = ($entry['fails'] ?? 0) + 1;
-    if ($entry['fails'] >= 3){
-        $entry['lock_until'] = $now + 60; // 1 minute
-        $_SESSION['login_fail'][$key] = $entry;
-        // log suspicious
+    $entry['last_attempt'] = $now;
+    
+    if ($entry['fails'] >= LOGIN_ATTEMPT_LIMIT) {
+        $entry['lock_until'] = $now + LOGIN_LOCKOUT_TIME;
         insert_suspicious_log($SUPABASE_URL, $SUPABASE_KEY, $username, $ip);
-        redirect_with_error_and_cooldown('Too many failed attempts. Try again later.', 60);
+        $_SESSION['login_fail'][$key] = $entry;
+        
+        $remaining = LOGIN_LOCKOUT_TIME;
+        $minutes = ceil($remaining / 60);
+        redirect_with_error_and_cooldown(
+            'Too many failed attempts. Please try again in ' . $minutes . ' minutes.',
+            $remaining
+        );
     } else {
         $_SESSION['login_fail'][$key] = $entry;
         redirect_with_error('Invalid username or password');
     }
 }
 
-$stored = isset($found['password']) ? (string)$found['password'] : '';
-if ($stored === '' || !password_verify($password, $stored)){
+// Verify password
+$storedHash = (string)($found['password'] ?? '');
+if (empty($storedHash) || !password_verify($password, $storedHash)) {
     $entry['fails'] = ($entry['fails'] ?? 0) + 1;
-    if ($entry['fails'] >= 3){
-        $entry['lock_until'] = $now + 60;
-        $_SESSION['login_fail'][$key] = $entry;
+    $entry['last_attempt'] = $now;
+    
+    if ($entry['fails'] >= LOGIN_ATTEMPT_LIMIT) {
+        $entry['lock_until'] = $now + LOGIN_LOCKOUT_TIME;
         insert_suspicious_log($SUPABASE_URL, $SUPABASE_KEY, $username, $ip);
-        redirect_with_error_and_cooldown('Too many failed attempts. Try again later.', 60);
+        
+        $remaining = LOGIN_LOCKOUT_TIME;
+        $minutes = ceil($remaining / 60);
+        $_SESSION['login_fail'][$key] = $entry;
+        
+        redirect_with_error_and_cooldown(
+            'Too many failed attempts. Please try again in ' . $minutes . ' minutes.',
+            $remaining
+        );
     } else {
         $_SESSION['login_fail'][$key] = $entry;
         redirect_with_error('Invalid username or password');
     }
 }
 
-// Set session
-$_SESSION['username'] = $found['username'] ?? $username;
-$_SESSION['role'] = $role;
-// Common identity fields used by dashboards
-$uid = isset($found['user_id']) ? (int)$found['user_id'] : null;
-if ($uid !== null) { $_SESSION['user_id'] = $uid; }
-// Build a display name if available
-if (isset($found['user_fname']) || isset($found['user_lname'])){
-    $fname = isset($found['user_fname']) ? $found['user_fname'] : '';
-    $lname = isset($found['user_lname']) ? $found['user_lname'] : '';
-    $name = trim($fname.' '.$lname);
-    if ($name !== '') {
-        $_SESSION['name'] = $name;
-        $_SESSION['firstname'] = $fname !== '' ? $fname : ($name ?: 'User');
-    }
-}
-if (!isset($_SESSION['name']) && isset($found['email'])){
-    $_SESSION['name'] = $found['email'];
-    $_SESSION['firstname'] = $found['user_fname'] ?? 'User';
-}
-
-// Successful login: reset fail counter and log
-unset($_SESSION['login_fail'][$key]);
+// Successful login - prepare session
 $userId = isset($found['user_id']) ? (int)$found['user_id'] : null;
-if ($userId !== null){
-    insert_login_log($SUPABASE_URL, $SUPABASE_KEY, $userId, $ip, $role);
+
+// Clear any existing session data to prevent session fixation
+$_SESSION = [];
+
+// Regenerate session ID for security
+if (function_exists('session_regenerate_id')) {
+    session_regenerate_id(true);
 }
 
-// Also store the source table name for use after login
-$_SESSION['source_table'] = $table_found;
+// Set basic session data
+$_SESSION = [
+    'user_id' => $userId,
+    'username' => $found['username'] ?? $username,
+    'role' => $role,
+    'source_table' => $table_found,
+    'last_activity' => $now,
+    'ip_address' => $ip,
+    'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? ''
+];
 
-// Strengthen session fixation protection
-if (function_exists('session_regenerate_id')) { @session_regenerate_id(true); }
+// Add user details
+$fname = $found['user_fname'] ?? '';
+$lname = $found['user_lname'] ?? '';
+$name = trim("$fname $lname");
 
-// Sign into Supabase Auth to obtain access/refresh tokens and store in $_SESSION
-// This enables the server to act as a middleman using the user's JWT for REST calls with RLS.
-if (function_exists('sb_has_auth_config') && sb_has_auth_config()){
-    // Prefer email if present; otherwise username (if your auth uses email-as-username)
-    $emailForAuth = $found['email'] ?? $username;
-    [$authData, $authErr] = sb_auth_sign_in($emailForAuth, $password);
-    // Non-fatal if Supabase Auth is not configured or fails; system still works with current flow
+if (!empty($name)) {
+    $_SESSION['name'] = $name;
+    $_SESSION['firstname'] = !empty($fname) ? $fname : $name;
+} elseif (isset($found['email'])) {
+    $_SESSION['name'] = $found['email'];
+    $_SESSION['firstname'] = !empty($fname) ? $fname : 'User';
 }
 
-// Redirect per role/table
-$dest = null;
-if ($role === 'buyer') {
-    $dest = '../dashboard/buyer/dashboard.php';
-} elseif ($role === 'seller') {
-    $dest = '../dashboard/seller/dashboard.php';
-} elseif ($role === 'admin') {
-    $dest = '../dashboard/admin/dashboard.php';
-} elseif ($role === 'bat') {
-    $dest = '../dashboard/bat/dashboard.php';
-} elseif ($role === 'superadmin') {
-    $dest = '../dashboard/superadmin/dashboard.php';
+// Clear failed login attempts
+unset($_SESSION['login_fail'][$key]);
+
+// Log successful login in background
+if ($userId !== null) {
+    // Use fastcgi_finish_request() if available to send response to client immediately
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+    
+    // Log login in background
+    register_shutdown_function(function() use ($SUPABASE_URL, $SUPABASE_KEY, $userId, $ip, $role) {
+        insert_login_log($SUPABASE_URL, $SUPABASE_KEY, $userId, $ip, $role);
+    });
 }
 
-if (!$dest){
-    redirect_with_error('Unable to route login');
+// Initialize Supabase Auth in background if available
+if (function_exists('sb_has_auth_config') && sb_has_auth_config() && isset($found['email'])) {
+    register_shutdown_function(function() use ($found, $password, $username) {
+        $emailForAuth = $found['email'] ?? $username;
+        @sb_auth_sign_in($emailForAuth, $password);
+    });
 }
 
-header('Location: '.$dest);
+// Define role-based redirects
+$roleRedirects = [
+    'superadmin' => '../dashboard/superadmin/dashboard.php',
+    'admin'      => '../dashboard/admin/dashboard.php',
+    'bat'        => '../dashboard/bat/dashboard.php',
+    'seller'     => '../dashboard/seller/dashboard.php',
+    'buyer'      => '../dashboard/buyer/dashboard.php',
+];
+
+// Get destination URL
+$dest = $roleRedirects[$role] ?? null;
+
+if (empty($dest)) {
+    error_log("No destination found for role: " . ($role ?? 'NULL'));
+    redirect_with_error('Unable to determine your dashboard. Please contact support.');
+}
+
+// Clear output buffer and redirect
+while (ob_get_level()) ob_end_clean();
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+header("Location: $dest", true, 303);
 exit;

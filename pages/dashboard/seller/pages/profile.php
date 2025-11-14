@@ -77,7 +77,11 @@ if ($userId) {
         <div class="field"><label>Province</label><input name="province" type="text" value="<?php echo htmlspecialchars($data['province']); ?>" /></div>
         <div class="field"><label>Email</label><input type="email" value="<?php echo htmlspecialchars($data['email']); ?>" readonly /></div>
         <div class="field"><label>RSBSA Number</label><input type="text" value="<?php echo htmlspecialchars($data['rsbsanum']); ?>" readonly /></div>
-        <div class="actions"><button class="primary" type="submit">Save changes</button></div>
+        <div class="actions">
+          <a class="secondary" href="../dashboard.php">Back</a>
+          <button class="ghost" type="button">Reset password</button>
+          <button class="primary" type="submit">Save changes</button>
+        </div>
       </form>
     </div>
   </div>

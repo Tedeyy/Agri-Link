@@ -73,7 +73,11 @@ if ($userId) {
         <div class="field"><label>Address</label><input name="address" type="text" value="<?php echo htmlspecialchars($data['address']); ?>" /></div>
         <div class="field"><label>Email</label><input type="email" value="<?php echo htmlspecialchars($data['email']); ?>" readonly /></div>
         <div class="field"><label>Assigned Barangay</label><input name="assigned_barangay" type="text" value="<?php echo htmlspecialchars($data['assigned_barangay']); ?>" /></div>
-        <div class="actions"><button class="primary" type="submit">Save changes</button></div>
+        <div class="actions">
+          <a class="secondary" href="../dashboard.php">Back</a>
+          <button class="ghost" type="button">Reset password</button>
+          <button class="primary" type="submit">Save changes</button>
+        </div>
       </form>
     </div>
   </div>
