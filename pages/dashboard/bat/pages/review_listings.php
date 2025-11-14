@@ -58,7 +58,7 @@ function fetch_seller($seller_id){
       <div class="card">
         <div class="row">
           <div class="thumbs">
-            <?php for ($i=1;$i<=3;$i++): $img="/pages/dashboard/bat/pages/storage_image.php?path=".rawurlencode("listings/underreview/$folder/image$i"); ?>
+            <?php for ($i=1;$i<=3;$i++): $img="storage_image.php?path=".rawurlencode("listings/underreview/$folder/image$i"); ?>
               <img src="<?php echo $img; ?>" alt="image<?php echo $i; ?>" onerror="this.style.display='none'" />
             <?php endfor; ?>
           </div>
@@ -96,7 +96,16 @@ function fetch_seller($seller_id){
             }
           ?>
           var el = document.getElementById('map-<?php echo (int)$r['listing_id']; ?>');
-          if (!el || lat===null || lng===null) return;
+          if (!el) return;
+          if (lat===null || lng===null){
+            el.style.display='flex';
+            el.style.alignItems='center';
+            el.style.justifyContent='center';
+            el.style.color='#4a5568';
+            el.style.fontSize='12px';
+            el.innerText='No location available';
+            return;
+          }
           var map = L.map(el).setView([lat,lng], 12);
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
           L.marker([lat,lng]).addTo(map);
