@@ -9,8 +9,8 @@ if (!$sellerId) {
   exit;
 }
 
-$tab = isset($_GET['tab']) ? strtolower($_GET['tab']) : 'review';
-if (!in_array($tab, ['review','active','sold','denied'], true)) { $tab = 'review'; }
+$tab = isset($_GET['tab']) ? strtolower($_GET['tab']) : 'pending';
+if (!in_array($tab, ['pending','active','sold','denied'], true)) { $tab = 'pending'; }
 
 function fetch_list($tables, $sellerId){
   $select = 'listing_id,livestock_type,breed,address,age,weight,price,status,created';
@@ -25,8 +25,8 @@ function fetch_list($tables, $sellerId){
   return [];
 }
 
-$reviewRows = ($tab==='review') ? fetch_list(['reviewlivestocklisting','reviewlivestocklistings'], $sellerId) : [];
-$activeRows = ($tab==='active') ? fetch_list(['livestocklisting','livestocklistings'], $sellerId) : [];
+$pendingRows = ($tab==='pending') ? fetch_list(['reviewlivestocklisting','reviewlivestocklistings','livestocklisting','livestocklistings'], $sellerId) : [];
+$activeRows = ($tab==='active') ? fetch_list(['activelivestocklisting','activelivestocklistings'], $sellerId) : [];
 $soldRows   = ($tab==='sold')   ? fetch_list(['soldlivestocklisting','soldlivestocklistings'], $sellerId) : [];
 $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting','deniedlivestocklistings'], $sellerId) : [];
 
@@ -50,15 +50,17 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting','deniedli
     </div>
 
     <div class="card">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <a class="btn" href="?tab=review" style="background:<?php echo $tab==='review'?'#d69e2e':'#718096'; ?>">Pendings</a>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <a class="btn" href="?tab=pending" style="background:<?php echo $tab==='pending'?'#d69e2e':'#718096'; ?>">Pending</a>
         <a class="btn" href="?tab=active" style="background:<?php echo $tab==='active'?'#d69e2e':'#718096'; ?>">Active</a>
         <a class="btn" href="?tab=sold" style="background:<?php echo $tab==='sold'?'#d69e2e':'#718096'; ?>">Sold</a>
         <a class="btn" href="?tab=denied" style="background:<?php echo $tab==='denied'?'#d69e2e':'#718096'; ?>">Denied</a>
+        <span style="flex:1 1 auto"></span>
+        <a class="btn" href="createlisting.php">Create Listing</a>
       </div>
 
       <?php
-        $rows = $reviewRows ?: ($activeRows ?: ($soldRows ?: $deniedRows));
+        $rows = $pendingRows ?: ($activeRows ?: ($soldRows ?: $deniedRows));
       ?>
       <div style="overflow:auto;">
         <table style="width:100%;border-collapse:collapse;">

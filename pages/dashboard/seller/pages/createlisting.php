@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       'age' => (int)$age,
       'weight' => (float)$weight,
       'price' => (float)$price,
-      'status' => 'pending'
+      'status' => 'Pending'
     ]];
     [$lres, $lstatus, $lerr] = sb_rest('POST', 'livestocklisting_logs', [], $logPayload, ['Prefer: return=representation']);
     if (!($lstatus >= 200 && $lstatus < 300)) {
