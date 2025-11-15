@@ -44,12 +44,26 @@ if ($action === 'approve'){
     'weight'=>(float)$rec['weight'],
     'price'=>(float)$rec['price'],
     'bat_id'=>(int)$bat_id,
-    'status'=>'Verified'
+    'status'=>'Pending',
+    'created'=> $rec['created'] ?? null
   ]];
   [$ar,$as,$ae] = sb_rest('POST','livestocklisting',[], $payload, ['Prefer: return=representation']);
   if (!($as>=200 && $as<300)){
     $_SESSION['flash_error'] = 'Approve failed.';
   } else {
+    // log action: status Pending with bat_id
+    $logPayload = [[
+      'seller_id'=>(int)$rec['seller_id'],
+      'livestock_type'=>$rec['livestock_type'],
+      'breed'=>$rec['breed'],
+      'address'=>$rec['address'],
+      'age'=>(int)$rec['age'],
+      'weight'=>(float)$rec['weight'],
+      'price'=>(float)$rec['price'],
+      'status'=>'Pending',
+      'bat_id'=>(int)$bat_id
+    ]];
+    sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
     $_SESSION['flash_message'] = 'Listing approved.';
   }
 } else if ($action === 'deny'){
@@ -68,7 +82,81 @@ if ($action === 'approve'){
   if (!($ds>=200 && $ds<300)){
     $_SESSION['flash_error'] = 'Deny failed.';
   } else {
-    $_SESSION['flash_message'] = 'Listing denied.';
+    // log action: status Denied with bat_id
+    $logPayload = [[
+      'seller_id'=>(int)$rec['seller_id'],
+      'livestock_type'=>$rec['livestock_type'],
+      'breed'=>$rec['breed'],
+      'address'=>$rec['address'],
+      'age'=>(int)$rec['age'],
+      'weight'=>(float)$rec['weight'],
+      'price'=>(float)$rec['price'],
+      'status'=>'Denied',
+      'bat_id'=>(int)$bat_id
+    ]];
+    sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+    $seller_id = (int)$rec['seller_id'];
+    $folder = $seller_id.'_'.((int)$rec['listing_id']);
+    $base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
+    $service = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
+    $auth = $_SESSION['supa_access_token'] ?? ($service ?: (getenv('SUPABASE_KEY') ?: ''));
+    $okImages = true;
+    $apikey = function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '');
+    for ($i=1; $i<=3; $i++){
+      $src = 'listings/underreview/'.$folder.'/image'.$i;
+      $dst = 'listings/denied/'.$folder.'/image'.$i;
+      $getUrl = rtrim($base,'/').'/storage/v1/object/'.ltrim($src,'/');
+      $ch = curl_init();
+      curl_setopt_array($ch,[
+        CURLOPT_URL=>$getUrl,
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_HTTPHEADER=>[
+          'apikey: '.$apikey,
+          'Authorization: Bearer '.$auth,
+        ]
+      ]);
+      $bytes = curl_exec($ch);
+      $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $ct = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+      curl_close($ch);
+      if ($code>=200 && $code<300 && $bytes!==false){
+        $putUrl = rtrim($base,'/').'/storage/v1/object/'.ltrim($dst,'/');
+        $ch2 = curl_init();
+        curl_setopt_array($ch2,[
+          CURLOPT_URL=>$putUrl,
+          CURLOPT_RETURNTRANSFER=>true,
+          CURLOPT_CUSTOMREQUEST=>'POST',
+          CURLOPT_HTTPHEADER=>[
+            'apikey: '.$apikey,
+            'Authorization: Bearer '.$auth,
+            'Content-Type: '.($ct ?: 'application/octet-stream'),
+            'x-upsert: true'
+          ],
+          CURLOPT_POSTFIELDS=>$bytes
+        ]);
+        $res2 = curl_exec($ch2);
+        $code2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+        curl_close($ch2);
+        if ($code2>=200 && $code2<300){
+          $delUrl = rtrim($base,'/').'/storage/v1/object/'.ltrim($src,'/');
+          $ch3 = curl_init();
+          curl_setopt_array($ch3,[
+            CURLOPT_URL=>$delUrl,
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_CUSTOMREQUEST=>'DELETE',
+            CURLOPT_HTTPHEADER=>[
+              'apikey: '.$apikey,
+              'Authorization: Bearer '.$auth,
+            ]
+          ]);
+          curl_exec($ch3);
+          curl_close($ch3);
+        } else {
+          $okImages = false;
+        }
+      }
+    }
+    $_SESSION['flash_message'] = 'Listing denied.'.($okImages?'' : ' Some images failed to move.');
   }
 }
 

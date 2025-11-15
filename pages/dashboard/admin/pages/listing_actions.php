@@ -1,0 +1,190 @@
+<?php
+session_start();
+require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
+
+if (($_SESSION['role'] ?? '') !== 'admin'){
+  http_response_code(302);
+  header('Location: ../dashboard.php');
+  exit;
+}
+$admin_id = $_SESSION['user_id'] ?? null;
+if (!$admin_id){
+  http_response_code(302);
+  header('Location: ../dashboard.php');
+  exit;
+}
+
+$action = $_POST['action'] ?? '';
+$listing_id = isset($_POST['listing_id']) ? (int)$_POST['listing_id'] : 0;
+if (!$listing_id || !in_array($action, ['approve','deny'], true)){
+  http_response_code(302);
+  header('Location: listingmanagement.php');
+  exit;
+}
+
+[$ires,$istatus,$ierr] = sb_rest('GET','livestocklisting',[
+  'select'=>'listing_id,seller_id,livestock_type,breed,address,age,weight,price,status,bat_id,created',
+  'listing_id'=>'eq.'.$listing_id,
+  'limit'=>1
+]);
+if (!($istatus>=200 && $istatus<300) || !is_array($ires) || !isset($ires[0])){
+  $_SESSION['flash_error'] = 'Listing not found or cannot load.';
+  header('Location: listingmanagement.php');
+  exit;
+}
+$rec = $ires[0];
+$seller_id = (int)$rec['seller_id'];
+$folder = $seller_id.'_'.((int)$rec['listing_id']);
+
+$base = function_exists('sb_base_url') ? sb_base_url() : (getenv('SUPABASE_URL') ?: '');
+$service = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
+$auth = $_SESSION['supa_access_token'] ?? ($service ?: (getenv('SUPABASE_KEY') ?: ''));
+
+function storage_get($path, $auth, $base){
+  $url = rtrim($base,'/').'/storage/v1/object/'.ltrim($path,'/');
+  $ch = curl_init();
+  curl_setopt_array($ch,[
+    CURLOPT_URL=>$url,
+    CURLOPT_RETURNTRANSFER=>true,
+    CURLOPT_HTTPHEADER=>[
+      'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
+      'Authorization: Bearer '.$auth,
+    ]
+  ]);
+  $data = curl_exec($ch);
+  $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $ct = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+  curl_close($ch);
+  if (!($code>=200 && $code<300)) return [null,null,false];
+  return [$data,$ct,true];
+}
+function storage_put($path, $bytes, $ct, $auth, $base){
+  $url = rtrim($base,'/').'/storage/v1/object/'.ltrim($path,'/');
+  $ch = curl_init();
+  curl_setopt_array($ch,[
+    CURLOPT_URL=>$url,
+    CURLOPT_RETURNTRANSFER=>true,
+    CURLOPT_CUSTOMREQUEST=>'POST',
+    CURLOPT_HTTPHEADER=>[
+      'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
+      'Authorization: Bearer '.$auth,
+      'Content-Type: '.($ct ?: 'application/octet-stream'),
+      'x-upsert: true'
+    ],
+    CURLOPT_POSTFIELDS=>$bytes
+  ]);
+  $res = curl_exec($ch);
+  $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return ($code>=200 && $code<300);
+}
+function storage_delete($path, $auth, $base){
+  $url = rtrim($base,'/').'/storage/v1/object/'.ltrim($path,'/');
+  $ch = curl_init();
+  curl_setopt_array($ch,[
+    CURLOPT_URL=>$url,
+    CURLOPT_RETURNTRANSFER=>true,
+    CURLOPT_CUSTOMREQUEST=>'DELETE',
+    CURLOPT_HTTPHEADER=>[
+      'apikey: '.(function_exists('sb_anon_key')? sb_anon_key() : (getenv('SUPABASE_KEY') ?: '')),
+      'Authorization: Bearer '.$auth,
+    ]
+  ]);
+  $res = curl_exec($ch);
+  $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return ($code>=200 && $code<300);
+}
+
+$destFolderRoot = ($action === 'approve') ? 'listings/active' : 'listings/denied';
+$okImages = true;
+for ($i=1; $i<=3; $i++){
+  $src = 'listings/underreview/'.$folder.'/image'.$i;
+  $dst = $destFolderRoot.'/'.$folder.'/image'.$i;
+  list($bytes,$ct,$got) = storage_get($src, $auth, $base);
+  if ($got && $bytes!==null){
+    if (storage_put($dst, $bytes, $ct, $auth, $base)){
+      storage_delete($src, $auth, $base);
+    } else {
+      $okImages = false;
+    }
+  }
+}
+
+if ($action === 'approve'){
+  $payload = [[
+    'seller_id'=>(int)$rec['seller_id'],
+    'livestock_type'=>$rec['livestock_type'],
+    'breed'=>$rec['breed'],
+    'address'=>$rec['address'],
+    'age'=>(int)$rec['age'],
+    'weight'=>(float)$rec['weight'],
+    'price'=>(float)$rec['price'],
+    'status'=>'Verified',
+    'admin_id'=>(int)$admin_id,
+    'bat_id'=> isset($rec['bat_id']) ? (int)$rec['bat_id'] : null,
+    'created'=> $rec['created'] ?? null
+  ]];
+  [$ar,$as,$ae] = sb_rest('POST','activelivestocklisting',[], $payload, ['Prefer: return=representation']);
+  if (!($as>=200 && $as<300)){
+    $_SESSION['flash_error'] = 'Approve failed.';
+    header('Location: listingmanagement.php');
+    exit;
+  }
+  // log action: status Active with admin_id (preserve bat_id if present)
+  $logPayload = [[
+    'seller_id'=>(int)$rec['seller_id'],
+    'livestock_type'=>$rec['livestock_type'],
+    'breed'=>$rec['breed'],
+    'address'=>$rec['address'],
+    'age'=>(int)$rec['age'],
+    'weight'=>(float)$rec['weight'],
+    'price'=>(float)$rec['price'],
+    'status'=>'Active',
+    'admin_id'=>(int)$admin_id,
+    'bat_id'=> isset($rec['bat_id']) ? (int)$rec['bat_id'] : null
+  ]];
+  sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+} else {
+  $payload = [[
+    'seller_id'=>(int)$rec['seller_id'],
+    'livestock_type'=>$rec['livestock_type'],
+    'breed'=>$rec['breed'],
+    'address'=>$rec['address'],
+    'age'=>(int)$rec['age'],
+    'weight'=>(float)$rec['weight'],
+    'price'=>(float)$rec['price'],
+    'status'=>'Denied',
+    'admin_id'=>(int)$admin_id,
+    'bat_id'=> isset($rec['bat_id']) ? (int)$rec['bat_id'] : null
+  ]];
+  [$dr,$ds,$de] = sb_rest('POST','deniedlivestocklisting',[], $payload, ['Prefer: return=representation']);
+  if (!($ds>=200 && $ds<300)){
+    $_SESSION['flash_error'] = 'Deny failed.';
+    header('Location: listingmanagement.php');
+    exit;
+  }
+  // log action: status Denied with admin_id
+  $logPayload = [[
+    'seller_id'=>(int)$rec['seller_id'],
+    'livestock_type'=>$rec['livestock_type'],
+    'breed'=>$rec['breed'],
+    'address'=>$rec['address'],
+    'age'=>(int)$rec['age'],
+    'weight'=>(float)$rec['weight'],
+    'price'=>(float)$rec['price'],
+    'status'=>'Denied',
+    'admin_id'=>(int)$admin_id
+  ]];
+  sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+}
+
+[$delr,$dels,$dele] = sb_rest('DELETE','livestocklisting',[ 'listing_id'=>'eq.'.$listing_id ]);
+if ($dels>=200 && $dels<300){
+  $_SESSION['flash_message'] = ($action==='approve'?'Listing approved.':'Listing denied.');
+  if (!$okImages){ $_SESSION['flash_message'] .= ' Some images failed to move.'; }
+} else {
+  $_SESSION['flash_error'] = 'Source cleanup failed.';
+}
+
+header('Location: listingmanagement.php');
