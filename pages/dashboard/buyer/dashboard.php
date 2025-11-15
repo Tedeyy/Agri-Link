@@ -30,6 +30,14 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
                 <input type="search" name="q" placeholder="Search" />
             </form>
         </div>
+        <div class="nav-center" style="display:flex;gap:16px;align-items:center;">
+            <a class="btn" href="pages/market.php">Marketplace</a>
+            <a class="btn" href="pages/pricewatch.php">Price Watch</a>
+            <a class="btn" href="pages/negotiations.php">Negotiations</a>
+            <a class="btn" href="pages/purchases.php">Purchases</a>
+            <a class="btn" href="pages/reports.php">Reports</a>
+            <a class="btn" href="pages/batcoordination.php">BAT Coordination</a>
+        </div>
         <div class="nav-right">
             <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></div>
             <a class="btn" href="../logout.php">Logout</a>
