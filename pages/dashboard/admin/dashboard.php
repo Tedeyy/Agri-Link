@@ -83,7 +83,6 @@ foreach ($typeNames as $i=>$tn){
             <a class="btn" href="pages/usermanagement.php" style="background:#4a5568;">Users</a>
             <a class="btn" href="pages/listingmanagement.php" style="background:#4a5568;">Listings</a>
             <a class="btn" href="pages/report_review.php" style="background:#4a5568;">Report Review & Penalty</a>
-            <a class="btn" href="pages/price_management.php" style="background:#4a5568;">Price Management</a>
             <a class="btn" href="pages/analytics.php" style="background:#4a5568;">Analytics</a>
         </div>
         <div class="nav-right">
@@ -109,6 +108,76 @@ foreach ($typeNames as $i=>$tn){
             <div>
                 <h1>Admin Dashboard</h1>
             </div>
+        </div>
+        <div class="card">
+            <h3 style="margin-top:0">Price Management</h3>
+            <?php
+            // Load livestock types and breeds for selects
+            [$ltRows,$ltSt,$ltErr] = sb_rest('GET','livestock_type',['select'=>'type_id,name']);
+            $types = (is_array($ltRows)? $ltRows : []);
+            ?>
+            <form id="price-form" onsubmit="return false;" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;">
+                <label>Livestock Type
+                    <select id="pm-type" required>
+                        <option value="">Select type</option>
+                        <?php foreach ($types as $t): ?>
+                            <option value="<?php echo (int)$t['type_id']; ?>"><?php echo htmlspecialchars($t['name']??('Type #'.(int)$t['type_id'])); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>Breed
+                    <select id="pm-breed" required disabled>
+                        <option value="">Select breed</option>
+                    </select>
+                </label>
+                <label>Market Price Per Kilo
+                    <input id="pm-price" type="number" step="0.01" min="0" placeholder="0.00" required />
+                </label>
+                <button id="pm-submit" class="btn" type="button">Submit</button>
+            </form>
+            <div id="pm-msg" style="margin-top:8px;font-size:14px;color:#4a5568"></div>
+            <script>
+                (function(){
+                    var btn = document.getElementById('pm-submit');
+                    var msg = document.getElementById('pm-msg');
+                    var typeSel = document.getElementById('pm-type');
+                    var breedSel = document.getElementById('pm-breed');
+                    function setMsg(t, ok){ if(!msg) return; msg.style.color = ok? '#166534':'#b91c1c'; msg.textContent = t; }
+                    async function loadBreeds(typeId){
+                        if (!breedSel) return;
+                        breedSel.innerHTML = '<option value="">Loading...</option>';
+                        breedSel.disabled = true;
+                        try{
+                            const res = await fetch('pages/price_api.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'breeds_by_type', livestocktype_id: Number(typeId) }) });
+                            const data = await res.json();
+                            breedSel.innerHTML = '<option value="">Select breed</option>';
+                            if (data.ok && Array.isArray(data.items)){
+                                data.items.forEach(function(b){
+                                    var opt = document.createElement('option');
+                                    opt.value = b.breed_id; opt.textContent = b.name || ('Breed #'+b.breed_id);
+                                    breedSel.appendChild(opt);
+                                });
+                                breedSel.disabled = false;
+                            } else {
+                                setMsg(data.error || 'Failed to load breeds', false);
+                            }
+                        }catch(e){ setMsg('Network error loading breeds', false); breedSel.innerHTML='<option value="">Select breed</option>'; }
+                    }
+                    if (typeSel){ typeSel.addEventListener('change', function(){ if (this.value) loadBreeds(this.value); else { breedSel.innerHTML='<option value="">Select breed</option>'; breedSel.disabled=true; } }); }
+                    if (btn){ btn.addEventListener('click', async function(){
+                        var typeId = typeSel.value;
+                        var breedId = breedSel.value;
+                        var price = document.getElementById('pm-price').value;
+                        if (!typeId || !breedId || !price){ setMsg('Please complete all fields', false); return; }
+                        try{
+                            const res = await fetch('pages/price_api.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'create_pending', livestocktype_id: Number(typeId), breed_id: Number(breedId), marketprice: Number(price) }) });
+                            const data = await res.json();
+                            if (!data.ok){ setMsg(data.error||'Failed to submit', false); return; }
+                            setMsg('Submitted for approval.', true);
+                        }catch(e){ setMsg('Network error', false); }
+                    }); }
+                })();
+            </script>
         </div>
         <div class="card">
             <p>Use this space to manage users, view system stats, and oversee platform content.</p>

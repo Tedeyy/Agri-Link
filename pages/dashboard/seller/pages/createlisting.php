@@ -188,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="wrap" style="max-width:1100px;margin:0 auto;">
     <div class="top">
       <div><h1>Create Listing</h1></div>
-      <div><a class="btn" href="../dashboard.php">Back to Dashboard</a></div>
+      <div><a class="btn" href="../managelistings.php">Back</a></div>
     </div>
     <div class="card" style="max-width:900px;margin:0 auto;">
       <?php if ($message): ?>

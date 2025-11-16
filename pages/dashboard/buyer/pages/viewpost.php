@@ -80,6 +80,25 @@ for ($i=1;$i<=3;$i++){
   $fallback = '../../bat/pages/storage_image.php?path=listings/active/'.$legacyFolder.'/image'.$i;
   $imgs[] = ['src'=>$primary,'fallback'=>$fallback];
 }
+
+// Resolve market price (approvedmarketpricing) by livestock type and breed
+$marketPerKilo = null; $marketTotal = null;
+$typeName = isset($r['livestock_type']) ? (string)$r['livestock_type'] : '';
+$breedName = isset($r['breed']) ? (string)$r['breed'] : '';
+if ($typeName !== '' && $breedName !== ''){
+  [$trows,$tst,$terr] = sb_rest('GET','livestock_type',[ 'select'=>'type_id,name', 'name'=>'eq.'.$typeName, 'limit'=>1 ]);
+  [$brows,$bst,$berr] = sb_rest('GET','livestock_breed',[ 'select'=>'breed_id,name', 'name'=>'eq.'.$breedName, 'limit'=>1 ]);
+  $typeId = ($tst>=200 && $tst<300 && is_array($trows) && isset($trows[0])) ? (int)$trows[0]['type_id'] : 0;
+  $breedId = ($bst>=200 && $bst<300 && is_array($brows) && isset($brows[0])) ? (int)$brows[0]['breed_id'] : 0;
+  if ($typeId>0 && $breedId>0){
+    [$ap,$aps,$ape] = sb_rest('GET','approvedmarketpricing',[ 'select'=>'marketprice,approved_at', 'livestocktype_id'=>'eq.'.$typeId, 'breed_id'=>'eq.'.$breedId, 'limit'=>1 ]);
+    if ($aps>=200 && $aps<300 && is_array($ap) && isset($ap[0])){
+      $marketPerKilo = (float)$ap[0]['marketprice'];
+      $w = isset($r['weight']) ? (float)$r['weight'] : 0;
+      if ($w>0) $marketTotal = $marketPerKilo * $w;
+    }
+  }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -140,6 +159,12 @@ for ($i=1;$i<=3;$i++){
           <div><strong>Age:</strong> <?php echo safe($r['age']); ?></div>
           <div><strong>Weight:</strong> <?php echo safe($r['weight']); ?> kg</div>
           <div><strong>Price:</strong> ₱<?php echo safe($r['price']); ?></div>
+          <?php if ($marketPerKilo !== null): ?>
+            <div><strong>Market Price (per kilo):</strong> ₱<?php echo number_format($marketPerKilo, 2); ?></div>
+          <?php endif; ?>
+          <?php if ($marketTotal !== null): ?>
+            <div><strong>Estimated Market Value:</strong> ₱<?php echo number_format($marketTotal, 2); ?></div>
+          <?php endif; ?>
         </div>
         <div>
           <div class="map" id="map"></div>

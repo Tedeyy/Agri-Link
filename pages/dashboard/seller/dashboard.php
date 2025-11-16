@@ -22,17 +22,23 @@ require_once __DIR__ . '/../../authentication/lib/supabase_client.php';
 $sellerId = $_SESSION['user_id'] ?? null;
 $pendingCount = 0; $activeCount = 0; $soldCount = 0; $deniedCount = 0;
 if ($sellerId){
-    function table_count_for_seller($tables, $sellerId){
-        foreach ($tables as $t){
-            [$res,$st,$err] = sb_rest('GET', $t, ['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
-            if ($st>=200 && $st<300 && is_array($res)) return count($res);
-        }
-        return 0;
-    }
-    $pendingCount = table_count_for_seller(['reviewlivestocklisting','reviewlivestocklistings'], $sellerId);
-    $activeCount  = table_count_for_seller(['livestocklisting','livestocklistings'], $sellerId);
-    $soldCount    = table_count_for_seller(['soldlivestocklisting','soldlivestocklistings'], $sellerId);
-    $deniedCount  = table_count_for_seller(['deniedlivestocklisting','deniedlivestocklistings'], $sellerId);
+    // Pending = reviewlivestocklisting + livestocklisting
+    [$p1,$p1s,$p1e] = sb_rest('GET','reviewlivestocklisting',['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+    if ($p1s>=200 && $p1s<300 && is_array($p1)) $pendingCount += count($p1);
+    [$p2,$p2s,$p2e] = sb_rest('GET','livestocklisting',['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+    if ($p2s>=200 && $p2s<300 && is_array($p2)) $pendingCount += count($p2);
+
+    // Active = activelivestocklisting
+    [$a1,$a1s,$a1e] = sb_rest('GET','activelivestocklisting',['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+    if ($a1s>=200 && $a1s<300 && is_array($a1)) $activeCount = count($a1);
+
+    // Sold
+    [$s1,$s1s,$s1e] = sb_rest('GET','soldlivestocklisting',['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+    if ($s1s>=200 && $s1s<300 && is_array($s1)) $soldCount = count($s1);
+
+    // Denied
+    [$d1,$d1s,$d1e] = sb_rest('GET','deniedlivestocklisting',['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+    if ($d1s>=200 && $d1s<300 && is_array($d1)) $deniedCount = count($d1);
 }
 ?>
 <!DOCTYPE html>
@@ -80,9 +86,6 @@ if ($sellerId){
         <div class="top">
             <div>
                 <h1>Seller Dashboard</h1>
-            </div>
-            <div>
-                <a class="btn" href="pages/createlisting.php">Create Listing</a>
             </div>
         </div>
         <div class="card">
