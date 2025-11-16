@@ -60,8 +60,12 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
             <div id="map" style="height:260px;border:1px solid #e2e8f0;border-radius:8px"></div>
         </div>
         <div class="card">
-            <div style="font-weight:600;margin-bottom:6px;">Market Activity</div>
-            <div style="height:260px"><canvas id="salesLineChart"></canvas></div>
+          <div style="font-weight:600;margin-bottom:6px;">Market Activity</div>
+          <div style="height:260px"><canvas id="salesLineChart"></canvas></div>
+        </div>
+        <div class="card">
+            <div style="font-weight:600;margin-bottom:6px;">Marketplace</div>
+            <iframe src="pages/market.php" style="width:100%;height:100vh;border:1px solid #e2e8f0;border-radius:8px;" loading="lazy"></iframe>
         </div>
         <div id="geoStatus" style="margin-top:8px;color:#4a5568;font-size:14px"></div>
     </div>

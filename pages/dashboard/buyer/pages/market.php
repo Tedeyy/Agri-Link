@@ -37,7 +37,7 @@ if (isset($_GET['ajax']) && $_GET['ajax']=='1'){
   foreach ($rows as $r){
     $seller = null;
     [$sres,$sstatus,$serr] = sb_rest('GET','seller',[
-      'select'=>'user_id,user_fname,user_lname,location',
+      'select'=>'user_id,user_fname,user_mname,user_lname,location',
       'user_id'=>'eq.'.((int)$r['seller_id']),
       'limit'=>1
     ]);
@@ -49,9 +49,21 @@ if (isset($_GET['ajax']) && $_GET['ajax']=='1'){
       if (is_array($loc)) { $lat = $loc['lat'] ?? null; $lng = $loc['lng'] ?? null; }
     }
 
-    $folder = ((int)$r['seller_id']).'_'.((int)$r['listing_id']);
-    $thumb = '../../bat/pages/storage_image.php?path=listings/active/'.$folder.'/image1';
-    $thumb_fallback = '../../bat/pages/storage_image.php?path=listings/underreview/'.$folder.'/image1';
+    $sfname = $seller['user_fname'] ?? '';
+    $smname = $seller['user_mname'] ?? '';
+    $slname = $seller['user_lname'] ?? '';
+    $fullname = trim($sfname.' '.($smname?:'').' '.$slname);
+    $sanFull = strtolower(preg_replace('/[^a-z0-9]+/i','_', $fullname));
+    $sanFull = trim($sanFull, '_');
+    if ($sanFull===''){ $sanFull='user'; }
+    $newFolder = ((int)$r['seller_id']).'_'.$sanFull;
+    $legacyFolder = ((int)$r['seller_id']).'_'.((int)$r['listing_id']);
+    $createdKey = isset($r['created']) ? date('YmdHis', strtotime($r['created'])) : '';
+    $thumb = ($createdKey!==''
+      ? '../../bat/pages/storage_image.php?path=listings/verified/'.$newFolder.'/'.$createdKey.'_1img.jpg'
+      : '../../bat/pages/storage_image.php?path=listings/active/'.$legacyFolder.'/image1');
+    $thumb_fallback = '../../bat/pages/storage_image.php?path=listings/active/'.$legacyFolder.'/image1';
+    // Keep only thumbnail in list; full gallery in viewpost.php
 
     $withSeller[] = [
       'listing_id' => (int)$r['listing_id'],
@@ -94,8 +106,9 @@ if ($bstatus < 200 || $bstatus >= 300) { $breeds = []; }
   <style>
     .filters{display:grid;grid-template-columns:repeat(8,minmax(120px,1fr));gap:8px}
     .feed{display:flex;flex-direction:column;gap:12px;margin-top:12px}
-    .item{display:grid;grid-template-columns:120px 1fr;gap:12px;border:1px solid #e2e8f0;border-radius:8px;padding:8px}
-    .item img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0}
+    .item{display:grid;grid-template-columns:360px 1fr;gap:12px;border:1px solid #e2e8f0;border-radius:8px;padding:8px}
+    .imgs{display:flex;gap:8px}
+    .imgs img{width:116px;height:116px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0}
     .map-top{height:280px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px}
     .show{margin-left:auto}
     .detail{display:none;border-top:1px dashed #e2e8f0;margin-top:8px;padding-top:8px}
@@ -244,6 +257,11 @@ if ($bstatus < 200 || $bstatus >= 300) { $breeds = []; }
           var img = document.createElement('img');
           img.src = it.thumb;
           img.alt = 'thumb';
+          img.style.width = '120px';
+          img.style.height = '120px';
+          img.style.objectFit = 'cover';
+          img.style.borderRadius = '8px';
+          img.style.border = '1px solid #e2e8f0';
           img.onerror = function(){ if (img.src !== it.thumb_fallback) img.src = it.thumb_fallback; else img.style.display='none'; };
           var info = document.createElement('div');
           info.innerHTML = (
@@ -251,10 +269,7 @@ if ($bstatus < 200 || $bstatus >= 300) { $breeds = []; }
             '<div>'+escapeHtml(it.address)+'</div>'+
             '<div>Age: '+escapeHtml(it.age)+' • Weight: '+escapeHtml(it.weight)+'kg • Price: ₱'+escapeHtml(it.price)+'</div>'+
             '<div class="muted">Listing #'+it.listing_id+' • Seller #'+it.seller_id+' • Created '+escapeHtml(it.created||'')+'</div>'+
-            (it.seller_name?('<div>Seller: '+escapeHtml(it.seller_name)+'</div>'):'')+
-            '<div class="detail">'+
-              '<div class="map" id="map-'+it.listing_id+'"></div>'+
-            '</div>'
+            (it.seller_name?('<div>Seller: '+escapeHtml(it.seller_name)+'</div>'):'')
           );
           var actions = document.createElement('div');
           actions.style.display = 'flex';
@@ -264,22 +279,7 @@ if ($bstatus < 200 || $bstatus >= 300) { $breeds = []; }
           showBtn.className = 'btn show';
           showBtn.textContent = 'Show';
           showBtn.addEventListener('click', function(){
-            var detail = info.querySelector('.detail');
-            var isHidden = (detail.style.display==='none' || detail.style.display==='');
-            detail.style.display = isHidden ? 'block' : 'none';
-            if (isHidden){
-              var m = info.querySelector('#map-'+it.listing_id);
-              if (m && !m._inited){
-                if (it.lat!=null && it.lng!=null){
-                  var map2 = L.map(m).setView([it.lat,it.lng], 12);
-                  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map2);
-                  L.marker([it.lat,it.lng]).addTo(map2);
-                } else {
-                  m.style.display='flex'; m.style.alignItems='center'; m.style.justifyContent='center'; m.style.color='#4a5568'; m.textContent='No location available';
-                }
-                m._inited = true;
-              }
-            }
+            window.location.href = 'viewpost.php?listing_id='+encodeURIComponent(it.listing_id);
           });
           actions.appendChild(showBtn);
 
