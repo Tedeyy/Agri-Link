@@ -41,14 +41,21 @@ if ($batId){
         <div class="nav-right">
             <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></div>
             <a class="btn" href="../logout.php">Logout</a>
-            <a class="notify" href="#" aria-label="Notifications" title="Notifications">
+            <a class="notify" href="#" aria-label="Notifications" title="Notifications" style="position:relative;">
                 <span class="avatar">🔔</span>
+                <span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;border-radius:999px;padding:0 6px;font-size:10px;line-height:16px;min-width:16px;text-align:center;">0</span>
             </a>
             <a class="profile" href="pages/profile.php" aria-label="Profile">
                 <span class="avatar">👤</span>
             </a>
         </div>
     </nav>
+    <div id="notifPane" style="display:none;position:fixed;top:56px;right:16px;width:300px;max-height:50vh;overflow:auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 20px rgba(0,0,0,.08);z-index:10000;">
+        <div style="padding:10px 12px;border-bottom:1px solid #f3f4f6;font-weight:600;">Notifications (<span id=\"notifCount\">0</span>)</div>
+        <div id="notifList" style="padding:8px 0;">
+            <div style="padding:10px 12px;color:#6b7280;">No notifications</div>
+        </div>
+    </div>
     <div class="wrap">
         <div class="top">
             <div>
@@ -72,6 +79,9 @@ if ($batId){
             </div>
             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
                 <a class="btn" href="pages/review_listings.php">Review Listings</a>
+                <a class="btn" href="pages/payment_supervision.php" style="background:#4a5568;">Payment Supervision</a>
+                <a class="btn" href="pages/area_mapping.php" style="background:#4a5568;">Area Mapping</a>
+                <a class="btn" href="pages/area_monitoring.php" style="background:#4a5568;">Area Monitoring</a>
             </div>
         </div>
         <div class="card">
@@ -93,6 +103,39 @@ if ($batId){
     </style>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
     <script src="script/dashboard.js"></script>
+    <script>
+      (function(){
+        var btn = document.querySelector('.notify');
+        var pane = document.getElementById('notifPane');
+        var badge = document.getElementById('notifBadge');
+        var listEl = document.getElementById('notifList');
+        var countEl = document.getElementById('notifCount');
+        function render(list){
+          var n = Array.isArray(list) ? list.length : 0;
+          if (badge){ badge.textContent = String(n); badge.style.display = n>0 ? 'inline-block' : 'none'; }
+          if (countEl){ countEl.textContent = String(n); }
+          if (!listEl) return;
+          listEl.innerHTML = '';
+          if (n === 0){
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding:10px 12px;color:#6b7280;';
+            empty.textContent = 'No notifications';
+            listEl.appendChild(empty);
+            return;
+          }
+          list.forEach(function(item){
+            var row = document.createElement('div');
+            row.style.cssText = 'padding:10px 12px;border-bottom:1px solid #f3f4f6;';
+            row.textContent = item && item.text ? item.text : String(item);
+            listEl.appendChild(row);
+          });
+        }
+        window.updateNotifications = function(list){ render(list||[]); };
+        if (btn){ btn.addEventListener('click', function(e){ e.preventDefault(); if (!pane) return; pane.style.display = (pane.style.display==='none'||pane.style.display==='') ? 'block' : 'none'; }); }
+        document.addEventListener('click', function(e){ if (!pane || !btn) return; if (!pane.contains(e.target) && !btn.contains(e.target)) { pane.style.display = 'none'; } });
+        render(window.NOTIFS || []);
+      })();
+    </script>
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:10000;">
       <div style="background:#fff;border-radius:10px;min-width:300px;max-width:90vw;padding:16px;">
         <h3 id="modal-title" style="margin-top:0">Add Schedule</h3>
