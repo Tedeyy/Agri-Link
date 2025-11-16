@@ -76,7 +76,7 @@ function storage_put($path, $bytes, $ct, $auth, $base){
   $res = curl_exec($ch);
   $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
-  return ($code>=200 && $code<300);
+  return [($code>=200 && $code<300), $code, $res];
 }
 function storage_delete($path, $auth, $base){
   $url = rtrim($base,'/').'/storage/v1/object/'.ltrim($path,'/');
@@ -97,7 +97,7 @@ function storage_delete($path, $auth, $base){
 }
 
 $destFolderRoot = ($action === 'approve') ? 'listings/verified' : 'listings/denied';
-$okImages = true;
+$okImages = true; $imageMissCount = 0; $imageMoveFail = 0; $imageMissingIdx = []; $imageFailedIdx = []; $imageFailedCodes = []; $imageMovedCount = 0;
 // Build new-style folder and created key
 $sfname='';$smname='';$slname='';
 [$sinf,$sinfst,$sinfe] = sb_rest('GET','seller',[ 'select'=>'user_fname,user_mname,user_lname','user_id'=>'eq.'.$seller_id, 'limit'=>1 ]);
@@ -126,15 +126,48 @@ for ($i=1; $i<=3; $i++){
     list($bytes,$ct,$got) = storage_get($src, $auth, $base);
   }
   if ($got && $bytes!==null){
-    if (storage_put($dst, $bytes, $ct, $auth, $base)){
-      storage_delete($src, $auth, $base);
+    list($ok,$wcode,$wres) = storage_put($dst, $bytes, $ct, $auth, $base);
+    if (!$ok){
+      // Retry with service role if available and different from $auth
+      $serviceRole = function_exists('sb_env') ? (sb_env('SUPABASE_SERVICE_ROLE_KEY') ?: '') : (getenv('SUPABASE_SERVICE_ROLE_KEY') ?: '');
+      if ($serviceRole && $serviceRole !== $auth){
+        list($ok2,$wcode2,$wres2) = storage_put($dst, $bytes, $ct, $serviceRole, $base);
+        if ($ok2){
+          storage_delete($src, $auth, $base);
+        } else {
+          $okImages = false; $imageMoveFail++; $imageFailedIdx[] = $i; $imageFailedCodes[$i] = $wcode2 ?: $wcode;
+        }
+      } else {
+        $okImages = false; $imageMoveFail++; $imageFailedIdx[] = $i; $imageFailedCodes[$i] = $wcode;
+      }
     } else {
-      $okImages = false;
+      storage_delete($src, $auth, $base);
+      $imageMovedCount++;
     }
+  } else {
+    $imageMissCount++; $imageMissingIdx[] = $i;
   }
 }
 
+// If approving and no images were moved at all, block approval with detailed error
+if ($action === 'approve' && $imageMovedCount === 0){
+  $parts = [];
+  if (!empty($imageMissingIdx)) { $parts[] = 'Missing: '.implode(',', $imageMissingIdx); }
+  if (!empty($imageFailedIdx)) {
+    $failWithCodes = array_map(function($i) use ($imageFailedCodes){
+      $code = isset($imageFailedCodes[$i]) ? (string)$imageFailedCodes[$i] : '?';
+      return $i.'('.$code.')';
+    }, $imageFailedIdx);
+    $parts[] = 'Failed: '.implode(',', $failWithCodes);
+  }
+  $_SESSION['flash_error'] = 'Approval blocked: no images could be moved. '.(!empty($parts)? ('Details: '.implode(' | ', $parts)) : '');
+  header('Location: listingmanagement.php');
+  exit;
+}
+
 if ($action === 'approve'){
+  $errors = [];
+  $notices = [];
   $payload = [[
     'seller_id'=>(int)$rec['seller_id'],
     'livestock_type'=>$rec['livestock_type'],
@@ -143,14 +176,17 @@ if ($action === 'approve'){
     'age'=>(int)$rec['age'],
     'weight'=>(float)$rec['weight'],
     'price'=>(float)$rec['price'],
-    'status'=>'Active',
+    'status'=>'Verified',
     'admin_id'=>(int)$admin_id,
     'bat_id'=> isset($rec['bat_id']) ? (int)$rec['bat_id'] : null,
     'created'=> $rec['created'] ?? null
   ]];
   [$ar,$as,$ae] = sb_rest('POST','activelivestocklisting',[], $payload, ['Prefer: return=representation']);
   if (!($as>=200 && $as<300)){
-    $_SESSION['flash_error'] = 'Approve failed.';
+    $detail = '';
+    if (is_array($ar) && isset($ar['message'])) { $detail = ' Detail: '.$ar['message']; }
+    elseif (is_string($ar) && $ar !== '') { $detail = ' Detail: '.$ar; }
+    $_SESSION['flash_error'] = 'Approve failed (code '.(string)$as.').'.$detail;
     header('Location: listingmanagement.php');
     exit;
   }
@@ -166,12 +202,20 @@ if ($action === 'approve'){
       $locStr = $sres[0]['location'] ?? null;
       if ($locStr && $locStr!=='' && $locStr!=='null'){
         $pinPayload = [[ 'location'=>$locStr, 'listing_id'=>$new_listing_id ]];
-        sb_rest('POST','activelocation_pins',[], $pinPayload, ['Prefer: return=representation']);
-        sb_rest('POST','location_pin_logs',[], $pinPayload, ['Prefer: return=representation']);
+        [$pr,$ps,$pe] = sb_rest('POST','activelocation_pins',[], $pinPayload, ['Prefer: return=representation']);
+        if (!($ps>=200 && $ps<300)) {
+          $d=''; if (is_array($pr) && isset($pr['message'])){ $d=' Detail: '.$pr['message']; } elseif (is_string($pr) && $pr!==''){ $d=' Detail: '.$pr; }
+          $notices[] = 'Map pin insert failed (code '.(string)$ps.').'.$d;
+        }
+        [$lr,$ls,$le] = sb_rest('POST','location_pin_logs',[], $pinPayload, ['Prefer: return=representation']);
+        if (!($ls>=200 && $ls<300)) {
+          $d=''; if (is_array($lr) && isset($lr['message'])){ $d=' Detail: '.$lr['message']; } elseif (is_string($lr) && $lr!==''){ $d=' Detail: '.$lr; }
+          $notices[] = 'Pin log insert failed (code '.(string)$ls.').'.$d;
+        }
       }
     }
   }
-  // log action: status Active with admin_id (preserve bat_id if present)
+  // log action: status Verified with admin_id (preserve bat_id if present)
   $logPayload = [[
     'seller_id'=>(int)$rec['seller_id'],
     'livestock_type'=>$rec['livestock_type'],
@@ -180,12 +224,18 @@ if ($action === 'approve'){
     'age'=>(int)$rec['age'],
     'weight'=>(float)$rec['weight'],
     'price'=>(float)$rec['price'],
-    'status'=>'Active',
+    'status'=>'Verified',
     'admin_id'=>(int)$admin_id,
     'bat_id'=> isset($rec['bat_id']) ? (int)$rec['bat_id'] : null
   ]];
-  sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+  [$lg,$lgs,$lge] = sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+  if (!($lgs>=200 && $lgs<300)) {
+    $d=''; if (is_array($lg) && isset($lg['message'])){ $d=' Detail: '.$lg['message']; } elseif (is_string($lg) && $lg!==''){ $d=' Detail: '.$lg; }
+    $notices[] = 'Listing log insert failed (code '.(string)$lgs.').'.$d;
+  }
 } else {
+  $errors = [];
+  $notices = [];
   $payload = [[
     'seller_id'=>(int)$rec['seller_id'],
     'livestock_type'=>$rec['livestock_type'],
@@ -200,7 +250,10 @@ if ($action === 'approve'){
   ]];
   [$dr,$ds,$de] = sb_rest('POST','deniedlivestocklisting',[], $payload, ['Prefer: return=representation']);
   if (!($ds>=200 && $ds<300)){
-    $_SESSION['flash_error'] = 'Deny failed.';
+    $detail = '';
+    if (is_array($dr) && isset($dr['message'])) { $detail = ' Detail: '.$dr['message']; }
+    elseif (is_string($dr) && $dr !== '') { $detail = ' Detail: '.$dr; }
+    $_SESSION['flash_error'] = 'Deny failed (code '.(string)$ds.').'.$detail;
     header('Location: listingmanagement.php');
     exit;
   }
@@ -216,15 +269,33 @@ if ($action === 'approve'){
     'status'=>'Denied',
     'admin_id'=>(int)$admin_id
   ]];
-  sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+  [$lr,$ls,$le] = sb_rest('POST','livestocklisting_logs',[], $logPayload, ['Prefer: return=representation']);
+  if (!($ls>=200 && $ls<300)) {
+    $d=''; if (is_array($lr) && isset($lr['message'])){ $d=' Detail: '.$lr['message']; } elseif (is_string($lr) && $lr!==''){ $d=' Detail: '.$lr; }
+    $notices[] = 'Listing log insert failed (code '.(string)$ls.').'.$d;
+  }
 }
 
 [$delr,$dels,$dele] = sb_rest('DELETE','livestocklisting',[ 'listing_id'=>'eq.'.$listing_id ]);
 if ($dels>=200 && $dels<300){
-  $_SESSION['flash_message'] = ($action==='approve'?'Listing approved.':'Listing denied.');
-  if (!$okImages){ $_SESSION['flash_message'] .= ' Some images failed to move.'; }
+  $msg = ($action==='approve'?'Listing approved.':'Listing denied.');
+  if (!$okImages){ $notices[] = 'Some images failed to move.'; }
+  if ($imageMissCount===3){ $notices[] = 'No images were found in under review folder.'; }
+  if (!empty($imageMissingIdx)) { $notices[] = 'Missing images: '.implode(',', $imageMissingIdx).'.'; }
+  if (!empty($imageFailedIdx)) {
+    $failWithCodes = array_map(function($i) use ($imageFailedCodes){
+      $code = isset($imageFailedCodes[$i]) ? (string)$imageFailedCodes[$i] : '?';
+      return $i.'('.$code.')';
+    }, $imageFailedIdx);
+    $notices[] = 'Failed images: '.implode(',', $failWithCodes).'.';
+  }
+  if (!empty($notices)) { $msg .= ' (' . implode(' ', $notices) . ')'; }
+  $_SESSION['flash_message'] = $msg;
 } else {
-  $_SESSION['flash_error'] = 'Source cleanup failed.';
+  $detail = '';
+  if (is_array($delr) && isset($delr['message'])) { $detail = ' Detail: '.$delr['message']; }
+  elseif (is_string($delr) && $delr !== '') { $detail = ' Detail: '.$delr; }
+  $_SESSION['flash_error'] = 'Source cleanup failed (code '.(string)$dels.').'.$detail;
 }
 
 header('Location: listingmanagement.php');

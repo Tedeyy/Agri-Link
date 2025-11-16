@@ -15,7 +15,7 @@ $toReview = 0; $approvedCount = 0; $deniedCount = 0;
 if ($batId){
     [$r1,$s1,$e1] = sb_rest('GET','reviewlivestocklisting',['select'=>'listing_id']);
     if ($s1>=200 && $s1<300 && is_array($r1)) $toReview = count($r1);
-    [$r2,$s2,$e2] = sb_rest('GET','livestocklisting',['select'=>'listing_id','bat_id'=>'eq.'.$batId]);
+    [$r2,$s2,$e2] = sb_rest('GET','livestocklisting_logs',['select'=>'listing_id','bat_id'=>'eq.'.$batId]);
     if ($s2>=200 && $s2<300 && is_array($r2)) $approvedCount = count($r2);
     [$r3,$s3,$e3] = sb_rest('GET','deniedlivestocklisting',['select'=>'listing_id','bat_id'=>'eq.'.$batId]);
     if ($s3>=200 && $s3<300 && is_array($r3)) $deniedCount = count($r3);

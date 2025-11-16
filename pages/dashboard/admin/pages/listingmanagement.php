@@ -58,6 +58,19 @@ function fetch_seller($seller_id){
       </div>
     </div>
 
+    <?php if (!empty($_SESSION['flash_message'])): ?>
+      <div class="card" style="border-left:4px solid #10b981;color:#065f46;background:#ecfdf5;">
+        <div style="padding:10px;"><?php echo safe($_SESSION['flash_message']); ?></div>
+      </div>
+      <?php unset($_SESSION['flash_message']); ?>
+    <?php endif; ?>
+    <?php if (!empty($_SESSION['flash_error'])): ?>
+      <div class="card" style="border-left:4px solid #ef4444;color:#7f1d1d;background:#fef2f2;">
+        <div style="padding:10px;"><?php echo safe($_SESSION['flash_error']); ?></div>
+      </div>
+      <?php unset($_SESSION['flash_error']); ?>
+    <?php endif; ?>
+
     <?php foreach ($rows as $r):
       $seller = fetch_seller((int)$r['seller_id']);
       // New folder: <seller_id>_<fullname_sanitized>
