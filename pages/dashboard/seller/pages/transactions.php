@@ -1,0 +1,204 @@
+<?php
+session_start();
+require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
+
+// Allow all roles; require login only
+$userId = (int)($_SESSION['user_id'] ?? 0);
+if ($userId === 0){
+  $_SESSION['flash_error'] = 'Please sign in to view transactions.';
+  header('Location: ../dashboard.php');
+  exit;
+}
+function safe($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+
+if (isset($_GET['action']) && $_GET['action']==='list'){
+  header('Content-Type: application/json');
+  [$rows,$st,$err] = sb_rest('GET','starttransactions',[
+    'select'=>'transaction_id,listing_id,seller_id,buyer_id,status,started_at,buyer:buyer(user_id,user_fname,user_mname,user_lname,email,contact,location),seller:seller(user_id,user_fname,user_mname,user_lname,email,contact,location),listing:activelivestocklisting(listing_id,livestock_type,breed,price,created,address)',
+    'or'=>'(seller_id.eq.'.$userId.',buyer_id.eq.'.$userId.')',
+    'order'=>'started_at.desc'
+  ]);
+  if (!($st>=200 && $st<300)){
+    $detail = is_string($err)? $err : '';
+    echo json_encode(['ok'=>false,'code'=>$st,'detail'=>$detail]);
+    exit;
+  }
+  if (!is_array($rows)) $rows = [];
+  $out = [];
+  foreach ($rows as $r){
+    $sellerRow = $r['seller'] ?? [];
+    $listing = $r['listing'] ?? [];
+    $created = $listing['created'] ?? '';
+    $digits = preg_replace('/\D+/', '', (string)$created);
+    $createdKey = substr($digits, 0, 14);
+    // Build seller folder from joined seller
+    $sellerIdForListing = (int)($r['seller_id'] ?? 0);
+    $sf = $sellerRow['user_fname'] ?? ''; $sm = $sellerRow['user_mname'] ?? ''; $sl = $sellerRow['user_lname'] ?? '';
+    $full = trim($sf.' '.($sm?:'').' '.$sl);
+    $san = strtolower(preg_replace('/[^a-z0-9]+/i','_', $full));
+    $san = trim($san, '_'); if ($san==='') $san='user';
+    $sellerNewFolder = $sellerIdForListing.'_'.$san;
+    $legacyFolder = $sellerIdForListing.'_'.((int)($listing['listing_id'] ?? 0));
+    $root = 'listings/verified';
+    $thumb = ($createdKey !== '')
+      ? ('../../bat/pages/storage_image.php?path='.$root.'/'.$sellerNewFolder.'/'.$createdKey.'_1img.jpg')
+      : ('../../bat/pages/storage_image.php?path='.$root.'/'.$legacyFolder.'/image1');
+    $thumb_fallback = '../../bat/pages/storage_image.php?path='.$root.'/'.$legacyFolder.'/image1';
+    // Seller location for map
+    $lat=null; $lng=null;
+    if (!empty($sellerRow['location'])){
+      $loc = json_decode($sellerRow['location'], true);
+      if (is_array($loc)){ $lat = $loc['lat'] ?? null; $lng = $loc['lng'] ?? null; }
+    }
+    $r['thumb'] = $thumb; $r['thumb_fallback'] = $thumb_fallback; $r['lat']=$lat; $r['lng']=$lng;
+    $out[] = $r;
+  }
+  echo json_encode(['ok'=>true,'count'=>count($out),'data'=>$out]);
+  exit;
+}
+
+?><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transactions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style/dashboard.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:9999}
+    .panel{background:#fff;border-radius:10px;max-width:900px;width:95vw;max-height:90vh;overflow:auto;padding:16px}
+    .subtle{color:#4a5568;font-size:12px}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{padding:8px;text-align:left}
+    .table thead tr{border-bottom:1px solid #e2e8f0}
+    .close-btn{background:#e53e3e;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top" style="margin-bottom:8px;">
+      <div><h1>My Transactions</h1></div>
+      <div>
+        <a class="btn" href="../dashboard.php">Back to Dashboard</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <table class="table" id="txTable">
+        <thead>
+          <tr>
+            <th>Tx ID</th>
+            <th>Buyer</th>
+            <th>Listing</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="txModal" class="modal">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <h2 style="margin:0;">Transaction Details</h2>
+        <button class="close-btn" data-close="txModal">Close</button>
+      </div>
+      <div id="txBody" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      function $(s){ return document.querySelector(s); }
+      function $all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
+      function openModal(id){ var el=document.getElementById(id); if(el) el.style.display='flex'; }
+      function closeModal(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }
+      $all('.close-btn').forEach(function(b){ b.addEventListener('click', function(){ closeModal(b.getAttribute('data-close')); }); });
+
+      function fullname(p){ if (!p) return ''; var f=p.user_fname||'', m=p.user_mname||'', l=p.user_lname||''; return (f+' '+(m?m+' ':'')+l).trim(); }
+      function load(){
+        fetch('transactions.php?action=list', { credentials:'same-origin' })
+          .then(function(r){ return r.json(); })
+          .then(function(res){
+            var tb = document.querySelector('#txTable tbody');
+            tb.innerHTML = '';
+            if (!res || res.ok===false){
+              var tr = document.createElement('tr');
+              var td = document.createElement('td'); td.colSpan = 6; td.style.color = '#7f1d1d';
+              td.textContent = 'Failed to load transactions'+(res && res.code? (' (code '+res.code+')') : '');
+              tr.appendChild(td); tb.appendChild(tr); return;
+            }
+            if (!res.data || res.data.length===0){
+              var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan = 6; td.textContent = 'No transactions found.'; tr.appendChild(td); tb.appendChild(tr); return;
+            }
+            (res.data||[]).forEach(function(row){
+              var buyer = row.buyer||{}; var seller = row.seller||{}; var listing = row.listing||{};
+              var role = (row.seller_id == <?php echo (int)$userId; ?>) ? 'Seller' : 'Buyer';
+              var counterparty = role==='Seller' ? (function(p){var f=p.user_fname||'',m=p.user_mname||'',l=p.user_lname||'';return (f+' '+(m?m+' ':'')+l).trim();})(buyer) : (function(p){var f=p.user_fname||'',m=p.user_mname||'',l=p.user_lname||'';return (f+' '+(m?m+' ':'')+l).trim();})(seller);
+              var tr = document.createElement('tr');
+              tr.innerHTML = '<td>'+ (row.transaction_id||'') +'</td>'+
+                '<td>'+ counterparty +'</td>'+
+                '<td>'+(listing.livestock_type||'')+' • '+(listing.breed||'')+'</td>'+
+                '<td>'+(row.status||'')+'</td>'+
+                '<td>'+(row.started_at||'')+'</td>'+
+                '<td><button class="btn btn-show" data-row="'+encodeURIComponent(JSON.stringify(row))+'">Show</button></td>';
+              tb.appendChild(tr);
+            });
+          });
+      }
+      load();
+
+      document.addEventListener('click', function(e){
+        if (e.target && e.target.classList.contains('btn-show')){
+          var data = JSON.parse(decodeURIComponent(e.target.getAttribute('data-row')||'{}'));
+          var buyer = data.buyer||{}; var seller = data.seller||{}; var listing = data.listing||{};
+          var body = document.getElementById('txBody');
+          var img = document.createElement('img');
+          img.src = data.thumb || '';
+          img.alt = 'thumb';
+          img.style.width = '160px'; img.style.height='160px'; img.style.objectFit='cover'; img.style.border='1px solid #e2e8f0'; img.style.borderRadius='8px';
+          img.onerror = function(){ if (data.thumb_fallback && img.src!==data.thumb_fallback) img.src = data.thumb_fallback; else img.style.display='none'; };
+          function initials(p){ var f=(p.user_fname||'').trim(), l=(p.user_lname||'').trim(); var s=(f?f[0]:'')+(l?l[0]:''); return s.toUpperCase()||'U'; }
+          function avatarHTML(p){ var ini=initials(p); return '<div style="width:40px;height:40px;border-radius:50%;background:#edf2f7;color:#2d3748;display:flex;align-items:center;justify-content:center;font-weight:600;">'+ini+'</div>'; }
+          body.innerHTML = ''+
+            '<h3>Listing</h3>'+
+            '<div style="display:flex;gap:12px;align-items:flex-start;">'+
+              '<div><strong>'+(listing.livestock_type||'')+' • '+(listing.breed||'')+'</strong><div>Price: ₱'+(listing.price||'')+'</div><div>Address: '+(listing.address||'')+'</div><div class="subtle">Listing #'+(listing.listing_id||'')+' • Created '+(listing.created||'')+'</div></div>'+
+              '<div id="imgWrap"></div>'+
+            '</div>'+
+            '<div style="margin-top:10px;"><div id="txMap" style="height:200px;border:1px solid #e2e8f0;border-radius:8px"></div></div>'+
+            '<hr style="margin:12px 0;border:none;border-top:1px solid #e2e8f0" />'+
+            '<h3>Seller</h3>'+
+            '<div style="display:flex;gap:10px;align-items:flex-start;">'+ avatarHTML(seller) +
+              '<div><div><strong>'+fullname(seller)+'</strong></div><div>Email: '+(seller.email||'')+'</div><div>Contact: '+(seller.contact||'')+'</div></div>'+
+            '</div>'+
+            '<h3 style="margin-top:10px;">Buyer</h3>'+
+            '<div style="display:flex;gap:10px;align-items:flex-start;">'+ avatarHTML(buyer) +
+              '<div><div><strong>'+fullname(buyer)+'</strong></div><div>Email: '+(buyer.email||'')+'</div><div>Contact: '+(buyer.contact||'')+'</div></div>'+
+            '</div>';
+          var wrap = document.getElementById('imgWrap'); if (wrap) wrap.appendChild(img);
+          // Map
+          setTimeout(function(){
+            var mEl = document.getElementById('txMap'); if (!mEl || !window.L) return;
+            var map = L.map(mEl).setView([8.314209 , 124.859425], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+            if (data.lat!=null && data.lng!=null){
+              map.setView([data.lat, data.lng], 12);
+              L.marker([data.lat, data.lng]).addTo(map);
+            }
+          }, 0);
+          openModal('txModal');
+        }
+      });
+
+      ['txModal'].forEach(function(id){ var el=document.getElementById(id); if(el){ el.addEventListener('click', function(ev){ if(ev.target===el) closeModal(id); }); }});
+    })();
+  </script>
+</body>
+</html>

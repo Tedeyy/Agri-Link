@@ -56,7 +56,22 @@ if (isset($_POST['action']) && $_POST['action'] === 'start_transaction'){
     echo json_encode(['ok'=>false,'error'=>'start_failed','code'=>$st,'detail'=>$detail]);
     exit;
   }
-  echo json_encode(['ok'=>true,'data'=>$res[0] ?? null]);
+  // Also write to transactions_logs
+  $logPayload = [[
+    'listing_id'=>$listingId,
+    'seller_id'=>(int)$sellerId,
+    'buyer_id'=>$buyerId,
+    'status'=>'Started'
+  ]];
+  [$lr,$ls,$le] = sb_rest('POST','transactions_logs',[], $logPayload, ['Prefer: return=representation']);
+  $warning = null;
+  if (!($ls>=200 && $ls<300)){
+    $ldetail = '';
+    if (is_array($lr) && isset($lr['message'])) { $ldetail = $lr['message']; }
+    elseif (is_string($lr) && $lr!=='') { $ldetail = $lr; }
+    $warning = 'Log insert failed (code '.(string)$ls.'). '.($ldetail?:'');
+  }
+  echo json_encode(['ok'=>true,'data'=>$res[0] ?? null, 'warning'=>$warning]);
   exit;
 }
 
@@ -308,13 +323,22 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting','deniedli
           openListingModal(data);
         }
         if (e.target && e.target.classList.contains('btn-start')){
-          var buyerId = e.target.getAttribute('data-buyer');
-          var listingId = e.target.getAttribute('data-listing');
-          e.target.disabled = true; e.target.textContent = 'Starting...';
+          var btn = e.target;
+          if (btn.disabled) return;
+          var buyerId = btn.getAttribute('data-buyer');
+          var listingId = btn.getAttribute('data-listing');
+          btn.disabled = true; btn.textContent = 'Starting...';
           startTransaction(listingId, buyerId).then(function(res){
-            if (!res.ok){ alert('Failed to start transaction (code '+(res.code||'?')+'): '+(res.detail||'')); }
-            else { alert('Transaction started'); }
-          }).finally(function(){ e.target.disabled=false; e.target.textContent='Initiate Transaction'; });
+            if (!res.ok){
+              alert('Failed to start transaction (code '+(res.code||'?')+'): '+(res.detail||''));
+              btn.disabled = false; btn.textContent = 'Initiate Transaction';
+            } else {
+              alert('Transaction started');
+              btn.disabled = true; btn.textContent = 'Started';
+            }
+          }).catch(function(){
+            btn.disabled = false; btn.textContent = 'Initiate Transaction';
+          });
         }
         if (e.target && e.target.classList.contains('btn-profile')){
           var buyerId = e.target.getAttribute('data-buyer');

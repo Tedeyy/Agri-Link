@@ -63,6 +63,7 @@ if ($sellerId){
         <div class="nav-center" style="display:flex;gap:16px;align-items:center;">
             <a class="btn" href="pages/pricewatch.php">Price Watch</a>
             <a class="btn" href="pages/userreport.php">User Report</a>
+            <a class="btn" href="pages/transactions.php">Transactions</a>
         </div>
         <div class="nav-right">
             <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -88,6 +89,18 @@ if ($sellerId){
                 <h1>Seller Dashboard</h1>
             </div>
         </div>
+        <?php if (!empty($_SESSION['flash_message'])): ?>
+            <div class="card" style="border-left:4px solid #10b981;color:#065f46;background:#ecfdf5;margin-bottom:8px;">
+                <div style="padding:10px;"><?php echo htmlspecialchars((string)$_SESSION['flash_message'], ENT_QUOTES, 'UTF-8'); ?></div>
+            </div>
+            <?php unset($_SESSION['flash_message']); ?>
+        <?php endif; ?>
+        <?php if (!empty($_SESSION['flash_error'])): ?>
+            <div class="card" style="border-left:4px solid #ef4444;color:#7f1d1d;background:#fef2f2;margin-bottom:8px;">
+                <div style="padding:10px;"><?php echo htmlspecialchars((string)$_SESSION['flash_error'], ENT_QUOTES, 'UTF-8'); ?></div>
+            </div>
+            <?php unset($_SESSION['flash_error']); ?>
+        <?php endif; ?>
         <div class="card">
             <p>Your Listings</p>
             <div class="listingstatus">
