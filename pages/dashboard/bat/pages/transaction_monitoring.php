@@ -54,34 +54,17 @@ if (isset($_POST['action']) && $_POST['action']==='set_schedule'){
 
 function fetch_table($table, $select, $order){
   [$rows,$st,$err] = sb_rest('GET', $table, [ 'select'=>$select, 'order'=>$order ]);
-  if (!($st>=200 && $st<300) || !is_array($rows)) return [];
-  return $rows;
+  return [
+    'ok' => ($st>=200 && $st<300) && is_array($rows),
+    'code' => $st,
+    'err' => is_string($err)? $err : '',
+    'rows' => (is_array($rows)? $rows : [])
+  ];
 }
 
-$start = fetch_table(
-  'starttransactions',
-  'transaction_id,listing_id,seller_id,buyer_id,status,started_at,'.
-  'buyer:buyer(user_id,user_fname,user_mname,user_lname,email,contact,location),' .
-  'seller:seller(user_id,user_fname,user_mname,user_lname,email,contact,location),' .
-  'listing:activelivestocklisting(listing_id,livestock_type,breed,price,created,address)',
-  'started_at.desc'
-);
-$ongo  = fetch_table(
-  'ongoingtransactions',
-  'transaction_id,listing_id,seller_id,buyer_id,status,started_at,bat_id,transaction_date,transaction_location,Transaction_location,'.
-  'buyer:buyer(user_id,user_fname,user_mname,user_lname,email,contact,location),' .
-  'seller:seller(user_id,user_fname,user_mname,user_lname,email,contact,location),' .
-  'listing:activelivestocklisting(listing_id,livestock_type,breed,price,created,address)',
-  'started_at.desc'
-);
-$done  = fetch_table(
-  'completedtransactions',
-  'transaction_id,listing_id,seller_id,buyer_id,status,started_at,bat_id,transaction_date,transaction_location,completed_transaction,'.
-  'buyer:buyer(user_id,user_fname,user_mname,user_lname,email,contact,location),' .
-  'seller:seller(user_id,user_fname,user_mname,user_lname,email,contact,location),' .
-  'listing:activelivestocklisting(listing_id,livestock_type,breed,price,created,address)',
-  'completed_transaction.desc'
-);
+$start = fetch_table('starttransactions','transaction_id,listing_id,seller_id,buyer_id,status,started_at','started_at.desc');
+$ongo  = fetch_table('ongoingtransactions','transaction_id,listing_id,seller_id,buyer_id,status,started_at','started_at.desc');
+$done  = fetch_table('completedtransactions','transaction_id,listing_id,seller_id,buyer_id,status,started_at,completed_transaction','completed_transaction.desc');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -107,6 +90,9 @@ $done  = fetch_table(
 
     <div class="card section">
       <h2 style="margin:0 0 8px 0;">Started</h2>
+      <?php if (!$start['ok']): ?>
+        <div style="margin:6px 0;padding:8px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:8px;">Failed to load started transactions (code <?php echo (int)$start['code']; ?>)</div>
+      <?php endif; ?>
       <table class="table">
         <thead>
           <tr>
@@ -116,12 +102,14 @@ $done  = fetch_table(
             <th>Buyer ID</th>
             <th>Status</th>
             <th>Started</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (!$start || count($start)===0): ?>
-            <tr><td colspan="6" style="color:#4a5568;">No started transactions.</td></tr>
-          <?php else: foreach ($start as $r): ?>
+          <?php $startRows = $start['rows'] ?? []; ?>
+          <?php if (count($startRows)===0): ?>
+            <tr><td colspan="7" style="color:#4a5568;">No started transactions.</td></tr>
+          <?php else: foreach ($startRows as $r): ?>
             <tr>
               <td><?php echo esc($r['transaction_id'] ?? ''); ?></td>
               <td><?php echo esc($r['listing_id'] ?? ''); ?></td>
@@ -129,6 +117,7 @@ $done  = fetch_table(
               <td><?php echo esc($r['buyer_id'] ?? ''); ?></td>
               <td><?php echo esc($r['status'] ?? ''); ?></td>
               <td><?php echo esc($r['started_at'] ?? ''); ?></td>
+              <td><button class="btn btn-show" data-row="<?php echo esc(json_encode($r)); ?>">Show</button></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
@@ -137,6 +126,9 @@ $done  = fetch_table(
 
     <div class="card section">
       <h2 style="margin:0 0 8px 0;">Ongoing</h2>
+      <?php if (!$ongo['ok']): ?>
+        <div style="margin:6px 0;padding:8px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:8px;">Failed to load ongoing transactions (code <?php echo (int)$ongo['code']; ?>)</div>
+      <?php endif; ?>
       <table class="table">
         <thead>
           <tr>
@@ -153,9 +145,10 @@ $done  = fetch_table(
           </tr>
         </thead>
         <tbody>
-          <?php if (!$ongo || count($ongo)===0): ?>
+          <?php $ongoRows = $ongo['rows'] ?? []; ?>
+          <?php if (count($ongoRows)===0): ?>
             <tr><td colspan="10" style="color:#4a5568;">No ongoing transactions.</td></tr>
-          <?php else: foreach ($ongo as $r): $loc = $r['transaction_location'] ?? ($r['Transaction_location'] ?? ''); ?>
+          <?php else: foreach ($ongoRows as $r): $loc = $r['transaction_location'] ?? ($r['Transaction_location'] ?? ''); ?>
             <tr>
               <td><?php echo esc($r['transaction_id'] ?? ''); ?></td>
               <td><?php echo esc($r['listing_id'] ?? ''); ?></td>
@@ -175,6 +168,9 @@ $done  = fetch_table(
 
     <div class="card section">
       <h2 style="margin:0 0 8px 0;">Completed</h2>
+      <?php if (!$done['ok']): ?>
+        <div style="margin:6px 0;padding:8px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:8px;">Failed to load completed transactions (code <?php echo (int)$done['code']; ?>)</div>
+      <?php endif; ?>
       <table class="table">
         <thead>
           <tr>
@@ -188,12 +184,14 @@ $done  = fetch_table(
             <th>Meet-up Date</th>
             <th>Location</th>
             <th>Completed</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (!$done || count($done)===0): ?>
-            <tr><td colspan="10" style="color:#4a5568;">No completed transactions.</td></tr>
-          <?php else: foreach ($done as $r): ?>
+          <?php $doneRows = $done['rows'] ?? []; ?>
+          <?php if (count($doneRows)===0): ?>
+            <tr><td colspan="11" style="color:#4a5568;">No completed transactions.</td></tr>
+          <?php else: foreach ($doneRows as $r): ?>
             <tr>
               <td><?php echo esc($r['transaction_id'] ?? ''); ?></td>
               <td><?php echo esc($r['listing_id'] ?? ''); ?></td>
@@ -205,6 +203,7 @@ $done  = fetch_table(
               <td><?php echo esc($r['transaction_date'] ?? ''); ?></td>
               <td><?php echo esc($r['transaction_location'] ?? ''); ?></td>
               <td><?php echo esc($r['completed_transaction'] ?? ''); ?></td>
+              <td><button class="btn btn-show" data-row="<?php echo esc(json_encode($r)); ?>">Show</button></td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
@@ -213,14 +212,14 @@ $done  = fetch_table(
 
   </div>
 
-  <!-- Ongoing Details Modal -->
-  <div id="ogModal" class="modal" style="display:none;align-items:center;justify-content:center;">
-    <div class="panel">
+  <!-- Transaction Details Modal -->
+  <div id="txModal" class="modal" style="display:none;align-items:center;justify-content:center;">
+    <div class="panel" style="max-width:820px;width:100%">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <h2 style="margin:0;">Ongoing Transaction</h2>
-        <button class="close-btn" data-close="ogModal">Close</button>
+        <h2 id="txTitle" style="margin:0;">Transaction</h2>
+        <button class="close-btn" data-close="txModal">Close</button>
       </div>
-      <div id="ogBody" style="margin-top:8px;"></div>
+      <div id="txBody" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -232,90 +231,103 @@ $done  = fetch_table(
       function openModal(id){ var el=document.getElementById(id); if(el) el.style.display='flex'; }
       function closeModal(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }
       $all('.close-btn').forEach(function(b){ b.addEventListener('click', function(){ closeModal(b.getAttribute('data-close')); }); });
-      function fullname(p){ if (!p) return ''; var f=p.user_fname||'', m=p.user_mname||'', l=p.user_lname||''; return (f+' '+(m?m+' ':'')+l).trim(); }
-      function initials(p){ var f=(p.user_fname||'').trim(), l=(p.user_lname||'').trim(); var s=(f?f[0]:'')+(l?l[0]:''); return s.toUpperCase()||'U'; }
-      function avatarHTML(p){ var ini=initials(p); return '<div style="width:40px;height:40px;border-radius:50%;background:#edf2f7;color:#2d3748;display:flex;align-items:center;justify-content:center;font-weight:600;">'+ini+'</div>'; }
       document.addEventListener('click', function(e){
         if (e.target && e.target.classList.contains('btn-show')){
           var data = {};
           try{ data = JSON.parse(e.target.getAttribute('data-row')||'{}'); }catch(_){ data={}; }
-          var seller = data.seller||{}; var buyer = data.buyer||{}; var listing = data.listing||{};
-          // Compute thumbnail from seller name + listing created
-          var sf=seller.user_fname||'', sm=seller.user_mname||'', sl=seller.user_lname||''; var full=(sf+' '+(sm?sm+' ':'')+sl).trim();
-          var san = (full.toLowerCase().replace(/[^a-z0-9]+/g,'_')||'user').replace(/^_+|_+$/g,'');
-          var sellerNewFolder = (data.seller_id||'') + '_' + san;
-          var created = listing.created||''; var digits = String(created).replace(/\D+/g,''); var createdKey = digits.substring(0,14);
-          var legacyFolder = (data.seller_id||'') + '_' + (listing.listing_id||'');
-          var root = 'listings/verified';
-          var thumb = createdKey ? ('../../bat/pages/storage_image.php?path='+root+'/'+sellerNewFolder+'/'+createdKey+'_1img.jpg') : ('../../bat/pages/storage_image.php?path='+root+'/'+legacyFolder+'/image1');
-          var thumb_fallback = '../../bat/pages/storage_image.php?path='+root+'/'+legacyFolder+'/image1';
-
-          var body = document.getElementById('ogBody');
-          var img = document.createElement('img'); img.src=thumb; img.alt='thumb'; img.style.width='160px'; img.style.height='160px'; img.style.objectFit='cover'; img.style.border='1px solid #e2e8f0'; img.style.borderRadius='8px';
-          img.onerror = function(){ if (thumb_fallback && img.src!==thumb_fallback) img.src = thumb_fallback; else img.style.display='none'; };
-          body.innerHTML = ''+
-            '<h3>Listing</h3>'+
-            '<div style="display:flex;gap:12px;align-items:flex-start;">'+
-              '<div><strong>'+(listing.livestock_type||'')+' • '+(listing.breed||'')+'</strong><div>Price: ₱'+(listing.price||'')+'</div><div>Address: '+(listing.address||'')+'</div><div class="subtle">Listing #'+(listing.listing_id||'')+' • Created '+(listing.created||'')+'</div></div>'+
-              '<div id="ogImgWrap"></div>'+
+          var isOngoing = !!(data && (data.bat_id || data.Bat_id || data.transaction_date || data.Transaction_date));
+          document.getElementById('txTitle').textContent = (isOngoing? 'Ongoing' : (data.completed_transaction? 'Completed' : 'Started')) + ' Transaction #'+(data.transaction_id||'');
+          var txBody = document.getElementById('txBody');
+          var locVal = data.transaction_location || data.Transaction_location || '';
+          var whenVal = data.transaction_date || data.Transaction_date || '';
+          var bodyHtml = ''+
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
+              '<div class="card" style="padding:10px;">'+
+                '<h3 style="margin:0 0 6px 0;">Identifiers</h3>'+
+                '<div>Listing ID: <strong>'+(data.listing_id||'')+'</strong></div>'+
+                '<div>Seller ID: <strong>'+(data.seller_id||'')+'</strong></div>'+
+                '<div>Buyer ID: <strong>'+(data.buyer_id||'')+'</strong></div>'+
+              '</div>'+
+              '<div class="card" style="padding:10px;">'+
+                '<h3 style="margin:0 0 6px 0;">Status & Dates</h3>'+
+                '<div>Status: <strong>'+(data.status||'')+'</strong></div>'+
+                '<div>Started: <strong>'+(data.started_at||'')+'</strong></div>'+
+                (whenVal? '<div>Meet-up: <strong>'+whenVal+'</strong></div>' : '')+
+                (data.completed_transaction? '<div>Completed: <strong>'+data.completed_transaction+'</strong></div>' : '')+
+              '</div>'+
             '</div>'+
-            '<div style="margin-top:10px;"><div id="ogMap" style="height:220px;border:1px solid #e2e8f0;border-radius:8px"></div></div>'+
-            '<hr style="margin:12px 0;border:none;border-top:1px solid #e2e8f0" />'+
-            '<h3>Seller</h3>'+
-            '<div style="display:flex;gap:10px;align-items:flex-start;">'+ avatarHTML(seller) +
-              '<div><div><strong>'+fullname(seller)+'</strong></div><div>Email: '+(seller.email||'')+'</div><div>Contact: '+(seller.contact||'')+'</div></div>'+
-            '</div>'+
-            '<h3 style="margin-top:10px;">Buyer</h3>'+
-            '<div style="display:flex;gap:10px;align-items:flex-start;">'+ avatarHTML(buyer) +
-              '<div><div><strong>'+fullname(buyer)+'</strong></div><div>Email: '+(buyer.email||'')+'</div><div>Contact: '+(buyer.contact||'')+'</div></div>'+
-            '</div>'+
-            '<hr style="margin:12px 0;border:none;border-top:1px solid #e2e8f0" />'+
-            '<h3>Schedule Meet-up</h3>'+
-            '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
-              '<label>Date & Time: <input type="datetime-local" id="ogWhen" /></label>'+
-              '<label>Location: <input type="text" id="ogLoc" placeholder="Click map to set lat,lng or type address" style="min-width:300px;"/></label>'+
-              '<button class="btn" id="ogSave">Save</button>'+
+            '<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">'+
+              '<div class="card" style="padding:10px;">'+
+                '<h3 style="margin:0 0 6px 0;">Location</h3>'+
+                '<div><input type="text" id="txLoc" value="'+(locVal||'')+'" placeholder="lat,lng" style="width:100%;" '+(isOngoing? '' : 'disabled')+' /></div>'+
+                '<div id="txMap" style="height:220px;border:1px solid #e2e8f0;border-radius:8px;margin-top:8px;"></div>'+
+              '</div>'+
+              (isOngoing ? (
+                '<div class="card" style="padding:10px;">'+
+                  '<h3 style="margin:0 0 6px 0;">Schedule Meet-up</h3>'+
+                  '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
+                    '<label>Date & Time: <input type="datetime-local" id="txWhen" value="'+(whenVal||'')+'" /></label>'+
+                    '<button class="btn" id="txSave">Save</button>'+
+                  '</div>'+
+                '</div>'
+              ) : '')+
             '</div>';
-          var wrap = document.getElementById('ogImgWrap'); if (wrap) wrap.appendChild(img);
+          txBody.innerHTML = bodyHtml;
+          // Map
           setTimeout(function(){
-            var mEl = document.getElementById('ogMap'); if (!mEl || !window.L) return;
+            var mEl = document.getElementById('txMap'); if (!mEl || !window.L) return;
             var map = L.map(mEl).setView([8.314209 , 124.859425], 12);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
             var marker=null;
-            map.on('click', function(ev){
-              var lat = ev.latlng.lat.toFixed(6), lng = ev.latlng.lng.toFixed(6);
-              $('#ogLoc').value = lat+','+lng;
-              if (marker){ marker.setLatLng(ev.latlng); } else { marker = L.marker(ev.latlng).addTo(map); }
-            });
+            // If loc present, center
+            if (locVal && locVal.indexOf(',')>0){
+              var parts = locVal.split(',');
+              var la = parseFloat(parts[0]); var ln = parseFloat(parts[1]);
+              if (!isNaN(la) && !isNaN(ln)){
+                var ll = [la,ln];
+                marker = L.marker(ll).addTo(map);
+                try{ map.setView(ll, 14); }catch(_){ }
+              }
+            }
+            if (isOngoing){
+              map.on('click', function(ev){
+                var lat = ev.latlng.lat.toFixed(6), lng = ev.latlng.lng.toFixed(6);
+                $('#txLoc').value = lat+','+lng;
+                if (marker){ marker.setLatLng(ev.latlng); } else { marker = L.marker(ev.latlng).addTo(map); }
+              });
+            }
           }, 0);
-          openModal('ogModal');
-          var save = document.getElementById('ogSave');
-          save.addEventListener('click', function(){
-            var when = document.getElementById('ogWhen').value;
-            var loc = document.getElementById('ogLoc').value;
-            if (!when){ alert('Please select date and time'); return; }
-            save.disabled = true; save.textContent = 'Saving...';
-            var fd = new FormData();
-            fd.append('action','set_schedule');
-            fd.append('transaction_id', data.transaction_id||'');
-            fd.append('listing_id', data.listing_id||'');
-            fd.append('seller_id', data.seller_id||'');
-            fd.append('buyer_id', data.buyer_id||'');
-            fd.append('transaction_date', when);
-            fd.append('transaction_location', loc||'');
-            fetch('transaction_monitoring.php', { method:'POST', body: fd, credentials:'same-origin' })
-              .then(function(r){ return r.json(); })
-              .then(function(res){
-                if (!res || res.ok===false){
-                  alert('Failed to save schedule'+(res && res.code? (' (code '+res.code+')') : ''));
-                  save.disabled=false; save.textContent='Save';
-                } else {
-                  var msg='Schedule saved'; if(res.warning) msg+='\n'+res.warning; alert(msg);
-                  save.disabled=true; save.textContent='Saved';
-                }
-              })
-              .catch(function(){ save.disabled=false; save.textContent='Save'; });
-          });
+          openModal('txModal');
+          // Save only for ongoing
+          if (isOngoing){
+            var save = document.getElementById('txSave');
+            save.addEventListener('click', function(){
+              var when = document.getElementById('txWhen').value;
+              var loc = document.getElementById('txLoc').value;
+              if (!when){ alert('Please select date and time'); return; }
+              save.disabled = true; save.textContent = 'Saving...';
+              var fd = new FormData();
+              fd.append('action','set_schedule');
+              fd.append('transaction_id', data.transaction_id||'');
+              fd.append('listing_id', data.listing_id||'');
+              fd.append('seller_id', data.seller_id||'');
+              fd.append('buyer_id', data.buyer_id||'');
+              fd.append('transaction_date', when);
+              fd.append('transaction_location', loc||'');
+              fetch('transaction_monitoring.php', { method:'POST', body: fd, credentials:'same-origin' })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                  if (!res || res.ok===false){
+                    alert('Failed to save schedule'+(res && res.code? (' (code '+res.code+')') : ''));
+                    save.disabled=false; save.textContent='Save';
+                  } else {
+                    var msg='Schedule saved'; if(res.warning) msg+='\n'+res.warning; alert(msg);
+                    save.disabled=true; save.textContent='Saved';
+                  }
+                })
+                .catch(function(){ save.disabled=false; save.textContent='Save'; });
+            });
+          }
         }
       });
     })();

@@ -102,6 +102,16 @@ if (isset($_POST['action']) && $_POST['action']==='schedule_meetup'){
   if (!($us>=200 && $us<300)){
     $warning2 = 'Failed to update starttransactions to Ongoing';
   }
+  // Delete from starttransactions to avoid duplicates in merged list
+  [$dr,$ds,$de] = sb_rest('DELETE','starttransactions', [
+    'listing_id'=>'eq.'.$listingId,
+    'seller_id'=>'eq.'.$sellerIdIn,
+    'buyer_id'=>'eq.'.$buyerIdIn
+  ]);
+  $warning3 = null;
+  if (!($ds>=200 && $ds<300)){
+    $warning3 = 'Failed to delete original starttransaction';
+  }
   $logPayload = [[
     'listing_id'=>$listingId,
     'seller_id'=>$sellerIdIn,
@@ -116,7 +126,7 @@ if (isset($_POST['action']) && $_POST['action']==='schedule_meetup'){
     elseif (is_string($lr) && $lr!=='') { $ldetail = $lr; }
     $warning = 'Log insert failed (code '.(string)$ls.'). '.($ldetail?:'');
   }
-  echo json_encode(['ok'=>true,'data'=>$ores[0] ?? null, 'warning'=>$warning, 'warning2'=>$warning2]);
+  echo json_encode(['ok'=>true,'data'=>$ores[0] ?? null, 'warning'=>$warning, 'warning2'=>$warning2, 'warning3'=>$warning3]);
   exit;
 }
 

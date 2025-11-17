@@ -20,6 +20,113 @@ if ($batId){
     [$r3,$s3,$e3] = sb_rest('GET','deniedlivestocklisting',['select'=>'listing_id','bat_id'=>'eq.'.$batId]);
     if ($s3>=200 && $s3<300 && is_array($r3)) $deniedCount = count($r3);
 }
+// Inline API: pins for map
+if (isset($_GET['action']) && $_GET['action']==='pins'){
+    header('Content-Type: application/json');
+    // Helper identical to buyer market.php
+    $parse_loc_pair = function($locStr){
+        $lat=null; $lng=null;
+        if (!$locStr) return [null,null];
+        $j = json_decode($locStr, true);
+        if (is_array($j)){
+            if (isset($j['lat']) && isset($j['lng'])){ return [(float)$j['lat'], (float)$j['lng']]; }
+            if (isset($j[0]) && isset($j[1])){ return [(float)$j[0], (float)$j[1]]; }
+        }
+        if (strpos($locStr, ',') !== false){
+            $parts = explode(',', $locStr, 2);
+            $lat = (float)trim($parts[0]);
+            $lng = (float)trim($parts[1]);
+            return [$lat,$lng];
+        }
+        return [null,null];
+    };
+    // Build active index for type/breed + price/created/address and seller info for thumbnails
+    [$alist,$alst,$aerr] = sb_rest('GET','activelivestocklisting',[ 'select'=>'listing_id,livestock_type,breed,price,created,address,seller_id', 'order'=>'created.desc', 'limit'=>1000 ]);
+    if (!($alst>=200 && $alst<300) || !is_array($alist)) $alist = [];
+    $activeIndex = [];
+    foreach ($alist as $arow){
+        $activeIndex[(int)($arow['listing_id']??0)] = [
+            'type'=>$arow['livestock_type']??'',
+            'breed'=>$arow['breed']??'',
+            'price'=>$arow['price']??'',
+            'created'=>$arow['created']??'',
+            'address'=>$arow['address']??'',
+            'seller_id'=>(int)($arow['seller_id']??0)
+        ];
+    }
+    // Active pins
+    [$ap,$as,$ae] = sb_rest('GET','activelocation_pins',[ 'select'=>'pin_id,location,listing_id,status' ]);
+    if (!($as>=200 && $as<300) || !is_array($ap)) $ap = [];
+    $activePins = [];
+    foreach ($ap as $p){
+        $lid = (int)($p['listing_id'] ?? 0);
+        if (!isset($activeIndex[$lid])) continue;
+        list($la,$ln) = $parse_loc_pair($p['location'] ?? '');
+        if ($la!==null && $ln!==null){
+            $meta = $activeIndex[$lid];
+            $sellerId = (int)$meta['seller_id'];
+            $legacyFolder = $sellerId.'_'.$lid;
+            $root = 'listings/verified';
+            $thumb = '../../bat/pages/storage_image.php?path='.$root.'/'.$legacyFolder.'/image1';
+            $fallback = $thumb;
+            $activePins[] = [
+              'listing_id'=>$lid,
+              'lat'=>(float)$la,
+              'lng'=>(float)$ln,
+              'type'=>$meta['type'],
+              'breed'=>$meta['breed'],
+              'price'=>$meta['price'],
+              'created'=>$meta['created'],
+              'address'=>$meta['address'],
+              'thumb'=>$thumb,
+              'thumb_fallback'=>$fallback
+            ];
+        }
+    }
+    // Sold index (build for thumbnails too with full details)
+    [$slist,$slst,$serr] = sb_rest('GET','soldlivestocklisting',[ 'select'=>'listing_id,livestock_type,breed,price,created,address,seller_id', 'order'=>'created.desc', 'limit'=>1000 ]);
+    if (!($slst>=200 && $slst<300) || !is_array($slist)) $slist = [];
+    $soldIndex = [];
+    foreach ($slist as $srow){
+        $soldIndex[(int)($srow['listing_id']??0)] = [
+            'type'=>$srow['livestock_type']??'',
+            'breed'=>$srow['breed']??'',
+            'price'=>$srow['price']??'',
+            'created'=>$srow['created']??'',
+            'address'=>$srow['address']??'',
+            'seller_id'=>(int)($srow['seller_id']??0)
+        ];
+    }
+    [$sp,$ss,$se] = sb_rest('GET','soldlocation_pins',[ 'select'=>'pin_id,location,listing_id,status' ]);
+    if (!($ss>=200 && $ss<300) || !is_array($sp)) $sp = [];
+    $soldPins = [];
+    foreach ($sp as $p){
+        $lid = (int)($p['listing_id'] ?? 0);
+        list($la,$ln) = $parse_loc_pair($p['location'] ?? '');
+        if ($la!==null && $ln!==null){
+            $meta = $soldIndex[$lid] ?? ['type'=>'','breed'=>'','seller_id'=>0,'created'=>''];
+            $sellerId = (int)($meta['seller_id']??0);
+            $legacyFolder = $sellerId.'_'.$lid;
+            $root = 'listings/verified';
+            $thumb = '../../bat/pages/storage_image.php?path='.$root.'/'.$legacyFolder.'/image1';
+            $fallback = $thumb;
+            $soldPins[] = [
+              'listing_id'=>$lid,
+              'lat'=>(float)$la,
+              'lng'=>(float)$ln,
+              'type'=>$meta['type'],
+              'breed'=>$meta['breed'],
+              'price'=>$meta['price']??'',
+              'created'=>$meta['created']??'',
+              'address'=>$meta['address']??'',
+              'thumb'=>$thumb,
+              'thumb_fallback'=>$fallback
+            ];
+        }
+    }
+    echo json_encode(['ok'=>true,'activePins'=>$activePins,'soldPins'=>$soldPins]);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,10 +186,12 @@ if ($batId){
             </div>
             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
                 <a class="btn" href="pages/review_listings.php">Review Listings</a>
-                <a class="btn" href="pages/payment_supervision.php" style="background:#4a5568;">Payment Supervision</a>
-                <a class="btn" href="pages/area_mapping.php" style="background:#4a5568;">Area Mapping</a>
-                <a class="btn" href="pages/area_monitoring.php" style="background:#4a5568;">Area Monitoring</a>
+                <a class="btn" href="pages/transaction_monitoring.php" style="background:#4a5568;">Transaction Monitoring</a>
             </div>
+        </div>
+        <div class="card">
+            <h2 style="margin-top:0">Market Map</h2>
+            <div id="batMap" style="height:400px;border:1px solid #e5e7eb;border-radius:10px;"></div>
         </div>
         <div class="card">
             <h2 style="margin-top:0">Scheduling Calendar</h2>
@@ -101,6 +210,8 @@ if ($batId){
     <style>
       .done-event .fc-event-title { text-decoration: line-through; opacity: 0.7; }
     </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
     <script src="script/dashboard.js"></script>
     <script>
@@ -134,6 +245,64 @@ if ($batId){
         if (btn){ btn.addEventListener('click', function(e){ e.preventDefault(); if (!pane) return; pane.style.display = (pane.style.display==='none'||pane.style.display==='') ? 'block' : 'none'; }); }
         document.addEventListener('click', function(e){ if (!pane || !btn) return; if (!pane.contains(e.target) && !btn.contains(e.target)) { pane.style.display = 'none'; } });
         render(window.NOTIFS || []);
+      })();
+    </script>
+    <script>
+      (function(){
+        function initMap(){
+          var mapEl = document.getElementById('batMap');
+          if (!mapEl) return;
+          if (!window.L){ setTimeout(initMap, 100); return; }
+          var map = L.map(mapEl).setView([8.314209 , 124.859425], 12);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+          setTimeout(function(){ try{ map.invalidateSize(); }catch(e){} }, 0);
+          fetch('dashboard.php?action=pins', { credentials:'same-origin' })
+            .then(function(r){ return r.json(); })
+            .then(function(res){
+              var added = 0; var b = [];
+              var active = (res && Array.isArray(res.activePins)) ? res.activePins : [];
+              var sold   = (res && Array.isArray(res.soldPins)) ? res.soldPins   : [];
+              active.forEach(function(p){
+                if (p.lat==null || p.lng==null) return;
+                var m = L.circleMarker([p.lat,p.lng], { radius:7, color:'#16a34a', fillColor:'#22c55e', fillOpacity:0.9 }).addTo(map);
+                var html = '<div style="display:flex;gap:8px;align-items:flex-start;pointer-events:none;">'+
+                  '<img src="'+(p.thumb||'')+'" onerror="this.onerror=null;this.src=\''+(p.thumb_fallback||p.thumb||'')+'\'" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'+
+                  '<div>'+
+                    '<div><strong>'+(p.type||'')+' • '+(p.breed||'')+'</strong></div>'+
+                    '<div>₱'+(p.price||'')+'</div>'+
+                    '<div class="subtle">#'+(p.listing_id||'')+' • '+(p.created||'')+'</div>'+
+                    (p.address? '<div class="subtle">'+p.address+'</div>' : '')+
+                  '</div>'+
+                '</div>';
+                m.bindTooltip(html, { direction:'top', sticky:true, opacity:0.95, className:'bat-pin-tt' });
+                added++; b.push([p.lat,p.lng]);
+              });
+              sold.forEach(function(p){
+                if (p.lat==null || p.lng==null) return;
+                var m2 = L.circleMarker([p.lat,p.lng], { radius:7, color:'#f59e0b', fillColor:'#fbbf24', fillOpacity:0.9 }).addTo(map);
+                var html2 = '<div style="display:flex;gap:8px;align-items:flex-start;pointer-events:none;">'+
+                  '<img src="'+(p.thumb||'')+'" onerror="this.onerror=null;this.src=\''+(p.thumb_fallback||p.thumb||'')+'\'" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb;" />'+
+                  '<div>'+
+                    '<div><strong>'+(p.type||'')+' • '+(p.breed||'')+'</strong></div>'+
+                    '<div>₱'+(p.price||'')+'</div>'+
+                    '<div class="subtle">#'+(p.listing_id||'')+' • '+(p.created||'')+'</div>'+
+                    (p.address? '<div class="subtle">'+p.address+'</div>' : '')+
+                  '</div>'+
+                '</div>';
+                m2.bindTooltip(html2, { direction:'top', sticky:true, opacity:0.95, className:'bat-pin-tt' });
+                added++; b.push([p.lat,p.lng]);
+              });
+              var statusEl = document.getElementById('geoStatus');
+              if (added>0){
+                try { map.fitBounds(b, { padding:[20,20] }); } catch(e){}
+                if (statusEl) statusEl.textContent = 'Pins loaded: '+added;
+              } else {
+                if (statusEl) statusEl.textContent = 'No pins available yet.';
+              }
+            })
+            .catch(function(){ /* ignore, map still renders */ });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMap); else initMap();
       })();
     </script>
     <div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:10000;">
