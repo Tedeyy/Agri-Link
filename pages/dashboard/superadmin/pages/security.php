@@ -85,9 +85,6 @@ require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
       <h3>Status</h3>
       <div id="status" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"></div>
     </div>
-    <div class="card">
-      <h3>Settings</h3>
-    </div>
     
     <div class="card">
       <h3>Suspicious Login Attempts</h3>

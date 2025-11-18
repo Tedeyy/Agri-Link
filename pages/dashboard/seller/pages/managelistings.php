@@ -34,7 +34,28 @@ if (isset($_GET['action']) && $_GET['action'] === 'buyer_profile'){
     'limit'=>1
   ]);
   if (!($st>=200 && $st<300) || !is_array($rows) || !isset($rows[0])){ echo json_encode(['ok'=>false,'error'=>'not_found']); exit; }
-  echo json_encode(['ok'=>true,'data'=>$rows[0]]);
+  
+  // Get buyer ratings
+  [$ratings,$ratingStatus] = sb_rest('GET','userrating',[
+    'select' => 'rating,description,created_at',
+    'buyer_id' => 'eq.' . $buyerId
+  ]);
+  
+  $ratingData = ['average' => 0, 'count' => 0];
+  if ($ratingStatus >= 200 && $ratingStatus < 300 && is_array($ratings) && !empty($ratings)) {
+    $total = 0;
+    foreach ($ratings as $rating) {
+      $total += (float)($rating['rating'] ?? 0);
+    }
+    $ratingData = [
+      'average' => round($total / count($ratings), 1),
+      'count' => count($ratings)
+    ];
+  }
+  
+  $buyerData = $rows[0];
+  $buyerData['rating'] = $ratingData;
+  echo json_encode(['ok'=>true,'data'=>$buyerData]);
   exit;
 }
 if (isset($_POST['action']) && $_POST['action'] === 'start_transaction'){
@@ -248,7 +269,7 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting'], $seller
       <div id="buyerDetails" style="margin-top:8px;"></div>
       <div class="grid2" style="margin-top:12px;">
         <div class="counter">Recent Violations (placeholder)</div>
-        <div class="counter">Rating (placeholder)</div>
+        <div class="counter" id="buyerRating">Rating (placeholder)</div>
       </div>
     </div>
   </div>
@@ -374,12 +395,18 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting'], $seller
             else {
               var b = res.data || {};
               var name = fullname(b);
+              var rating = b.rating || {average: 0, count: 0};
               details.innerHTML = '<div><strong>'+name+'</strong></div>'+
                 '<div>Email: '+(b.email||'')+'</div>'+
                 '<div>Birthdate: '+(b.bdate||'')+'</div>'+
                 '<div>Contact: '+(b.contact||'')+'</div>'+
                 '<div>Address: '+(b.address||'')+'</div>'+
                 '<div>'+[b.barangay,b.municipality,b.province].filter(Boolean).join(', ')+'</div>';
+              
+              var ratingEl = $('#buyerRating');
+              if (ratingEl) {
+                ratingEl.innerHTML = rating.average + ' ⭐ (' + rating.count + ' rating' + (rating.count !== 1 ? 's' : '') + ')';
+              }
             }
           });
           openModal('buyerModal');
