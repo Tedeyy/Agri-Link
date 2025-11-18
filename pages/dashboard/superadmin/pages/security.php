@@ -77,6 +77,11 @@ require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
       <div class="brand">Security</div>
     </div>
     <div class="nav-right">
+      <div class="hamburger" aria-label="Toggle mobile menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
       <a class="btn" href="../dashboard.php">Back to Dashboard</a>
     </div>
   </nav>
@@ -282,4 +287,5 @@ require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
     });
   </script>
 </body>
+<script src="../../shared/mobile-menu.js"></script>
 </html>

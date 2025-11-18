@@ -70,6 +70,11 @@ if ($sellerId){
             <a class="btn" href="pages/transactions.php">Transactions</a>
         </div>
         <div class="nav-right">
+            <div class="hamburger" aria-label="Toggle mobile menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
             <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></div>
             <a class="btn" href="../logout.php">Logout</a>
             <a class="notify" href="#" aria-label="Notifications" title="Notifications" style="position:relative;">
@@ -185,4 +190,5 @@ if ($sellerId){
       })();
     </script>
 </body>
+<script src="../shared/mobile-menu.js"></script>
 </html>

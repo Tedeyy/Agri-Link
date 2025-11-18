@@ -65,6 +65,9 @@ $batNames = fetchUserNames($batIds, 'bat');
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../style/dashboard.css">
     <style>
+        body {
+            font-size: 18px;
+        }
         .table-container {
             overflow-x: auto;
             margin-top: 20px;
@@ -75,10 +78,10 @@ $batNames = fetchUserNames($batIds, 'bat');
             background: white;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
         }
         th, td {
-            padding: 12px;
+            padding: 10px;
             text-align: left;
             border-bottom: 1px solid #e5e7eb;
         }
@@ -86,10 +89,10 @@ $batNames = fetchUserNames($batIds, 'bat');
             background: #f9fafb;
             font-weight: 600;
             color: #374151;
-            font-size: 14px;
+            font-size: 16px;
         }
         td {
-            font-size: 14px;
+            font-size: 15px;
             color: #4b5563;
         }
         tr:hover {
@@ -100,7 +103,7 @@ $batNames = fetchUserNames($batIds, 'bat');
             color: #dc2626;
             padding: 4px 8px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 500;
         }
         .pagination {
@@ -115,6 +118,7 @@ $batNames = fetchUserNames($batIds, 'bat');
             background: white;
             border-radius: 4px;
             cursor: pointer;
+            font-size: 14px;
         }
         .pagination button:hover {
             background: #f3f4f6;
@@ -124,6 +128,37 @@ $batNames = fetchUserNames($batIds, 'bat');
             color: white;
             border-color: #3b82f6;
         }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+            body {
+                font-size: 16px;
+                padding: 8px;
+            }
+            
+            .wrap {
+                padding: 0 4px;
+            }
+            
+            .card {
+                padding: 12px;
+                border-radius: 6px;
+            }
+            
+            h1 {
+                font-size: 22px;
+            }
+            
+            th, td {
+                padding: 6px 4px;
+                font-size: 12px;
+            }
+            
+            .pagination button {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -131,8 +166,22 @@ $batNames = fetchUserNames($batIds, 'bat');
         <div class="nav-left">
             <div class="brand">Livestock Listing Logs</div>
         </div>
+        <div class="nav-center" style="display:flex;gap:16px;align-items:center;">
+            <a class="btn" href="../dashboard.php">Dashboard</a>
+            <a class="btn" href="generatereports.php">Generate Reports</a>
+            <a class="btn" href="usermanagement.php">User Management</a>
+            <a class="btn" href="price_actions.php">Price Actions</a>
+            <a class="btn" href="listing_actions.php">Listing Actions</a>
+            <a class="btn" href="security.php">Security</a>
+            <a class="btn" href="price_management.php">Price Management</a>
+            <a class="btn" href="../../logout.php">Logout</a>
+        </div>
         <div class="nav-right">
-            <a class="btn" href="../dashboard.php">Back to Dashboard</a>
+            <div class="hamburger" aria-label="Toggle mobile menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
         </div>
     </nav>
 
@@ -207,4 +256,5 @@ $batNames = fetchUserNames($batIds, 'bat');
         });
     </script>
 </body>
+<script src="../../shared/mobile-menu.js"></script>
 </html>

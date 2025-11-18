@@ -16,6 +16,11 @@ session_start();
       <div class="brand">Reports and Violations</div>
     </div>
     <div class="nav-right">
+      <div class="hamburger" aria-label="Toggle mobile menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
       <a class="btn" href="../dashboard.php">Back to Dashboard</a>
     </div>
   </nav>
@@ -76,4 +81,5 @@ session_start();
     </div>
   </div>
 </body>
+<script src="../../shared/mobile-menu.js"></script>
 </html>

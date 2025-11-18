@@ -51,7 +51,14 @@ if (!is_array($logs)) $logs = [];
 <body>
   <nav class="navbar">
     <div class="nav-left"><div class="brand">Price Watch</div></div>
-    <div class="nav-right"><a class="btn" href="../dashboard.php">Back to Dashboard</a></div>
+    <div class="nav-right">
+      <div class="hamburger" aria-label="Toggle mobile menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <a class="btn" href="../dashboard.php">Back to Dashboard</a>
+    </div>
   </nav>
   <div class="wrap">
     <div class="card">
@@ -110,4 +117,5 @@ if (!is_array($logs)) $logs = [];
     // Placeholder: wire to your price source when ready
   </script>
 </body>
+<script src="../../shared/mobile-menu.js"></script>
 </html>

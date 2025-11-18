@@ -38,6 +38,11 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
             <a class="btn" href="pages/userreport.php">User Report</a>
         </div>
         <div class="nav-right">
+            <div class="hamburger" aria-label="Toggle mobile menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
             <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?> • <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></div>
             <a class="btn" href="../logout.php">Logout</a>
             <a class="notify" href="#" aria-label="Notifications" title="Notifications" style="position:relative;">
@@ -161,5 +166,6 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
         render(window.NOTIFS || []);
       })();
     </script>
-  </body>
+</body>
+<script src="../shared/mobile-menu.js"></script>
 </html>

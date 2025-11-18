@@ -25,6 +25,11 @@ if (is_array($breeds)) { foreach ($breeds as $b){ $breedMap[(int)$b['breed_id']]
       <div class="brand">Superadmin</div>
     </div>
     <div class="nav-right">
+      <div class="hamburger" aria-label="Toggle mobile menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
       <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?></div>
       <a class="btn" href="../../logout.php">Logout</a>
       <a class="profile" href="profile.php" aria-label="Profile"><span class="avatar">👤</span></a>
@@ -96,4 +101,5 @@ if (is_array($breeds)) { foreach ($breeds as $b){ $breedMap[(int)$b['breed_id']]
     })();
   </script>
 </body>
+<script src="../../shared/mobile-menu.js"></script>
 </html>
