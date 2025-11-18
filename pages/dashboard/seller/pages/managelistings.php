@@ -78,15 +78,19 @@ if (isset($_POST['action']) && $_POST['action'] === 'start_transaction'){
 $tab = isset($_GET['tab']) ? strtolower($_GET['tab']) : 'pending';
 if (!in_array($tab, ['pending','active','sold','denied'], true)) { $tab = 'pending'; }
 
-function fetch_list($tables, $sellerId){
+function fetch_list($tables, $sellerId, $statusFilter = null){
   $select = 'listing_id,livestock_type,breed,address,age,weight,price,status,created';
   $all = [];
   foreach ($tables as $t){
-    [$res,$st,$err] = sb_rest('GET', $t, [
+    $params = [
       'select' => $select,
       'seller_id' => 'eq.'.$sellerId,
       'order' => 'created.desc'
-    ]);
+    ];
+    if ($statusFilter) {
+      $params['status'] = 'eq.'.$statusFilter;
+    }
+    [$res,$st,$err] = sb_rest('GET', $t, $params);
     if ($st>=200 && $st<300 && is_array($res)){
       foreach ($res as $row){ $all[] = $row; }
     }
@@ -97,8 +101,8 @@ function fetch_list($tables, $sellerId){
 }
 
 $pendingRows = ($tab==='pending') ? fetch_list(['reviewlivestocklisting','livestocklisting'], $sellerId) : [];
-$activeRows = ($tab==='active') ? fetch_list(['activelivestocklisting'], $sellerId) : [];
-$soldRows   = ($tab==='sold')   ? fetch_list(['soldlivestocklisting'], $sellerId) : [];
+$activeRows = ($tab==='active') ? fetch_list(['activelivestocklisting'], $sellerId, 'Verified') : [];
+$soldRows   = ($tab==='sold')   ? fetch_list(['activelivestocklisting'], $sellerId, 'Sold') : [];
 $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting'], $sellerId) : [];
 
 ?>
@@ -123,6 +127,7 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting'], $seller
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .counter{border:1px dashed #cbd5e0;border-radius:8px;height:100px;display:flex;align-items:center;justify-content:center;color:#4a5568}
     .close-btn{background:#e53e3e;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer}
+    .sold-listing{text-decoration:line-through;color:#718096}
   </style>
 </head>
 <body>
@@ -167,8 +172,8 @@ $deniedRows = ($tab==='denied') ? fetch_list(['deniedlivestocklisting'], $seller
               <?php foreach ($rows as $r): ?>
                 <tr style="border-bottom:1px solid #edf2f7;">
                   <td style="padding:8px;">&nbsp;<?php echo htmlspecialchars((string)($r['listing_id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                  <td style="padding:8px;">&nbsp;<?php echo htmlspecialchars((string)($r['livestock_type'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                  <td style="padding:8px;">&nbsp;<?php echo htmlspecialchars((string)($r['breed'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                  <td style="padding:8px;">&nbsp;<span class="<?php echo (strtolower($r['status'] ?? '') === 'sold') ? 'sold-listing' : ''; ?>"><?php echo htmlspecialchars((string)($r['livestock_type'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span></td>
+                  <td style="padding:8px;">&nbsp;<span class="<?php echo (strtolower($r['status'] ?? '') === 'sold') ? 'sold-listing' : ''; ?>"><?php echo htmlspecialchars((string)($r['breed'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span></td>
                   <td style="padding:8px;">&nbsp;<?php echo htmlspecialchars((string)($r['age'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                   <td style="padding:8px;">&nbsp;<?php echo htmlspecialchars((string)($r['weight'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                   <td style="padding:8px;">&nbsp;<?php echo htmlspecialchars((string)($r['price'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>

@@ -23,20 +23,24 @@ $sellerId = $_SESSION['user_id'] ?? null;
 $pendingCount = 0; $activeCount = 0; $soldCount = 0; $deniedCount = 0;
 if ($sellerId){
     // helper to count rows across multiple tables
-    $countFrom = function($tables) use ($sellerId){
+    $countFrom = function($tables, $statusFilter = null) use ($sellerId){
         $sum = 0;
         foreach ($tables as $t){
-            [$rows,$st,$err] = sb_rest('GET',$t,['select'=>'listing_id','seller_id'=>'eq.'.$sellerId]);
+            $params = ['select'=>'listing_id','seller_id'=>'eq.'.$sellerId];
+            if ($statusFilter) {
+                $params['status'] = 'eq.'.$statusFilter;
+            }
+            [$rows,$st,$err] = sb_rest('GET',$t,$params);
             if ($st>=200 && $st<300 && is_array($rows)) $sum += count($rows);
         }
         return $sum;
     };
     // Pending = reviewlivestocklisting + livestocklisting (support plural variants too)
     $pendingCount = $countFrom(['reviewlivestocklisting','reviewlivestocklistings','livestocklisting','livestocklistings']);
-    // Active
-    $activeCount = $countFrom(['activelivestocklisting','activelivestocklistings']);
-    // Sold
-    $soldCount   = $countFrom(['soldlivestocklisting','soldlivestocklistings']);
+    // Active = activelivestocklisting where status is 'Verified'
+    $activeCount = $countFrom(['activelivestocklisting','activelivestocklistings'], 'Verified');
+    // Sold = activelivestocklisting where status is 'Sold'
+    $soldCount   = $countFrom(['activelivestocklisting','activelivestocklistings'], 'Sold');
     // Denied
     $deniedCount = $countFrom(['deniedlivestocklisting','deniedlivestocklistings']);
 }
@@ -46,7 +50,7 @@ if ($sellerId){
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seller Dashboard</title>
+    <title>Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style/dashboard.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -86,7 +90,7 @@ if ($sellerId){
     <div class="wrap">
         <div class="top">
             <div>
-                <h1>Seller Dashboard</h1>
+                <h1>Dashboard</h1>
             </div>
         </div>
         <?php if (!empty($_SESSION['flash_message'])): ?>

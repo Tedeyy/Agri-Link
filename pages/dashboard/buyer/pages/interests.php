@@ -34,7 +34,7 @@ foreach ($ints as $it){
     continue;
   }
   // Try sold
-  [$sld,$sst,$ser] = sb_rest('GET','soldlivestocklisting',[ 'select'=>'listing_id,seller_id,livestock_type,breed,address,age,weight,price,created', 'listing_id'=>'eq.'.$lid, 'limit'=>1 ]);
+  [$sld,$sst,$ser] = sb_rest('GET','activelivestocklisting',[ 'select'=>'listing_id,seller_id,livestock_type,breed,address,age,weight,price,created', 'listing_id'=>'eq.'.$lid, 'status'=>'eq.Sold', 'limit'=>1 ]);
   if ($sst>=200 && $sst<300 && is_array($sld) && isset($sld[0])){
     $listings[] = ['row'=>$sld[0], 'interest'=>$it, 'status'=>'Sold'];
     continue;

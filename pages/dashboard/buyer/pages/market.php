@@ -65,7 +65,7 @@ if (isset($_GET['pins']) && $_GET['pins']=='1'){
   $sparams = ['select'=>'listing_id,livestock_type,breed,created'];
   if (!empty($_GET['livestock_type'])){ $sparams['livestock_type'] = 'eq.'.$_GET['livestock_type']; }
   if (!empty($_GET['breed'])){ $sparams['breed'] = 'eq.'.$_GET['breed']; }
-  [$slist,$slst,$serr] = sb_rest('GET','soldlivestocklisting',$sparams);
+  [$slist,$slst,$serr] = sb_rest('GET','activelivestocklisting',array_merge($sparams, ['status'=>'eq.Sold']));
   if (!($slst>=200 && $slst<300) || !is_array($slist)) $slist = [];
   $soldIndex = [];
   foreach ($slist as $srow){ $soldIndex[(int)$srow['listing_id']] = ['type'=>$srow['livestock_type']??'', 'breed'=>$srow['breed']??'']; }
@@ -145,10 +145,19 @@ if (isset($_GET['ajax']) && $_GET['ajax']=='1'){
     $newFolder = ((int)$r['seller_id']).'_'.$sanFull;
     $legacyFolder = ((int)$r['seller_id']).'_'.((int)$r['listing_id']);
     $createdKey = isset($r['created']) ? date('YmdHis', strtotime($r['created'])) : '';
+    
+    // Determine status folder based on listing status
+    $status = strtolower($r['status'] ?? 'active');
+    $statusFolder = 'active'; // default
+    if ($status === 'verified') $statusFolder = 'verified';
+    elseif ($status === 'sold') $statusFolder = 'sold';
+    elseif ($status === 'underreview') $statusFolder = 'underreview';
+    elseif ($status === 'denied') $statusFolder = 'denied';
+    
     $thumb = ($createdKey!==''
-      ? '../../bat/pages/storage_image.php?path=listings/verified/'.$newFolder.'/'.$createdKey.'_1img.jpg'
-      : '../../bat/pages/storage_image.php?path=listings/active/'.$legacyFolder.'/image1');
-    $thumb_fallback = '../../bat/pages/storage_image.php?path=listings/active/'.$legacyFolder.'/image1';
+      ? '../../bat/pages/storage_image.php?path=listings/'.$statusFolder.'/'.$newFolder.'/'.$createdKey.'_1img.jpg'
+      : '../../bat/pages/storage_image.php?path=listings/'.$statusFolder.'/'.$legacyFolder.'/image1');
+    $thumb_fallback = '../../bat/pages/storage_image.php?path=listings/'.$statusFolder.'/'.$legacyFolder.'/image1';
     // Keep only thumbnail in list; full gallery in viewpost.php
 
     $withSeller[] = [

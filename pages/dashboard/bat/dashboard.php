@@ -84,7 +84,7 @@ if (isset($_GET['action']) && $_GET['action']==='pins'){
         }
     }
     // Sold index (build for thumbnails too with full details)
-    [$slist,$slst,$serr] = sb_rest('GET','soldlivestocklisting',[ 'select'=>'listing_id,livestock_type,breed,price,created,address,seller_id', 'order'=>'created.desc', 'limit'=>1000 ]);
+    [$slist,$slst,$serr] = sb_rest('GET','activelivestocklisting',[ 'select'=>'listing_id,livestock_type,breed,price,created,address,seller_id', 'status'=>'eq.Sold', 'order'=>'created.desc', 'limit'=>1000 ]);
     if (!($slst>=200 && $slst<300) || !is_array($slist)) $slist = [];
     $soldIndex = [];
     foreach ($slist as $srow){
@@ -127,13 +127,77 @@ if (isset($_GET['action']) && $_GET['action']==='pins'){
     echo json_encode(['ok'=>true,'activePins'=>$activePins,'soldPins'=>$soldPins]);
     exit;
 }
+
+// Prepare data for sales chart (last 3 months and next month)
+$labels = [];
+$monthKeys = [];
+$now = new DateTime('first day of this month 00:00:00');
+for ($i=-3; $i<=1; $i++){
+  $d = (clone $now)->modify(($i>=0?'+':'').$i.' month');
+  $labels[] = $d->format('M');
+  $monthKeys[] = $d->format('Y-m');
+}
+
+// Get livestock types
+[$typesRes,$typesStatus,$typesErr] = sb_rest('GET','livestock_type',['select'=>'name']);
+$typeNames = [];
+if ($typesStatus>=200 && $typesStatus<300 && is_array($typesRes)){
+  foreach ($typesRes as $row){ if (!empty($row['name'])) $typeNames[] = $row['name']; }
+}
+// Fallback default labels if table empty
+if (count($typeNames)===0){ $typeNames = ['Cattle','Goat','Pigs']; }
+
+// Fetch sold listings from activelivestocklisting with status='Sold'
+[$soldRes,$soldStatus,$soldErr] = sb_rest('GET','activelivestocklisting',['select'=>'livestock_type,breed,price,created','status'=>'eq.Sold']);
+$series = [];
+foreach ($typeNames as $tn){ $series[$tn] = array_fill(0, count($monthKeys), 0); }
+if ($soldStatus>=200 && $soldStatus<300 && is_array($soldRes)){
+  foreach ($soldRes as $r){
+    $lt = $r['livestock_type'] ?? null;
+    $price = (float)($r['price'] ?? 0);
+    $created = isset($r['created']) ? substr($r['created'],0,7) : null; // YYYY-MM
+    if (!$lt || !$created) continue;
+    $idx = array_search($created, $monthKeys, true);
+    if ($idx===false) continue;
+    if (isset($series[$lt])) $series[$lt][$idx] += $price;
+  }
+}
+
+// Build datasets with colors for livestock types
+$palette = ['#8B4513','#16a34a','#ec4899','#2563eb','#f59e0b','#10b981','#ef4444','#6b7280'];
+$datasets = [];
+foreach ($typeNames as $i=>$tn){
+  $datasets[] = [
+    'label' => $tn,
+    'data' => $series[$tn],
+    'borderColor' => $palette[$i % count($palette)],
+    'backgroundColor' => 'transparent',
+    'tension' => 0.3,
+    'spanGaps' => true,
+    'pointRadius' => 0
+  ];
+}
+
+// Prepare breed data for bar chart
+[$breedSoldRes,$breedSoldStatus,$breedSoldErr] = sb_rest('GET','activelivestocklisting',['select'=>'breed','status'=>'eq.Sold']);
+$breedCounts = [];
+if ($breedSoldStatus>=200 && $breedSoldStatus<300 && is_array($breedSoldRes)){
+  foreach ($breedSoldRes as $r){
+    $breed = $r['breed'] ?? 'Unknown';
+    if (!isset($breedCounts[$breed])) $breedCounts[$breed] = 0;
+    $breedCounts[$breed]++;
+  }
+}
+arsort($breedCounts); // Sort by count descending
+$breedLabels = array_keys($breedCounts);
+$breedData = array_values($breedCounts);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BAT Dashboard</title>
+    <title>Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style/dashboard.css">
     </head>
@@ -166,7 +230,7 @@ if (isset($_GET['action']) && $_GET['action']==='pins'){
     <div class="wrap">
         <div class="top">
             <div>
-                <h1>BAT Dashboard</h1>
+                <h1>Dashboard</h1>
             </div>
         </div>
         <div class="card">
@@ -194,6 +258,18 @@ if (isset($_GET['action']) && $_GET['action']==='pins'){
             <div id="batMap" style="height:400px;border:1px solid #e5e7eb;border-radius:10px;"></div>
         </div>
         <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <h2 style="margin-top:0">Sales Analytics</h2>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn" id="btnLivestockType" style="background:#2563eb;">Livestock Type</button>
+                    <button class="btn" id="btnBreed" style="background:#4a5568;">Breed</button>
+                </div>
+            </div>
+            <div class="chartbox" style="height:300px;position:relative;">
+                <canvas id="batSalesChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
             <h2 style="margin-top:0">Scheduling Calendar</h2>
             <div id="calendar"></div>
             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -213,6 +289,12 @@ if (isset($_GET['action']) && $_GET['action']==='pins'){
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <div id="bat-sales-data"
+         data-labels='<?php echo json_encode($labels, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>'
+         data-datasets='<?php echo json_encode($datasets, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>'
+         data-breed-labels='<?php echo json_encode($breedLabels, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>'
+         data-breed-data='<?php echo json_encode($breedData, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT); ?>'></div>
     <script src="script/dashboard.js"></script>
     <script>
       (function(){
@@ -245,6 +327,117 @@ if (isset($_GET['action']) && $_GET['action']==='pins'){
         if (btn){ btn.addEventListener('click', function(e){ e.preventDefault(); if (!pane) return; pane.style.display = (pane.style.display==='none'||pane.style.display==='') ? 'block' : 'none'; }); }
         document.addEventListener('click', function(e){ if (!pane || !btn) return; if (!pane.contains(e.target) && !btn.contains(e.target)) { pane.style.display = 'none'; } });
         render(window.NOTIFS || []);
+      })();
+      
+      // Sales Chart Implementation
+      (function(){
+        var chartEl = document.getElementById('batSalesChart');
+        var dataEl = document.getElementById('bat-sales-data');
+        var livestockBtn = document.getElementById('btnLivestockType');
+        var breedBtn = document.getElementById('btnBreed');
+        
+        if (!chartEl || !dataEl || !window.Chart) return;
+        
+        try {
+          var labels = JSON.parse(dataEl.getAttribute('data-labels') || '[]');
+          var datasets = JSON.parse(dataEl.getAttribute('data-datasets') || '[]');
+          var breedLabels = JSON.parse(dataEl.getAttribute('data-breed-labels') || '[]');
+          var breedData = JSON.parse(dataEl.getAttribute('data-breed-data') || '[]');
+          
+          var currentChart = null;
+          var currentView = 'livestock'; // 'livestock' or 'breed'
+          
+          function createLivestockChart() {
+            if (currentChart) currentChart.destroy();
+            currentChart = new Chart(chartEl, {
+              type: 'line',
+              data: { labels: labels, datasets: datasets },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: { 
+                  legend: { position: 'bottom' },
+                  title: { display: true, text: 'Sales by Livestock Type (Last 4 Months)' }
+                },
+                scales: { 
+                  y: { 
+                    beginAtZero: true, 
+                    suggestedMin: 0,
+                    title: { display: true, text: 'Sales Amount (₱)' }
+                  } 
+                }
+              }
+            });
+            currentView = 'livestock';
+            livestockBtn.style.background = '#2563eb';
+            breedBtn.style.background = '#4a5568';
+          }
+          
+          function createBreedChart() {
+            if (currentChart) currentChart.destroy();
+            
+            // Generate colors for breeds
+            var colors = breedLabels.map(function(_, i) {
+              var palette = ['#8B4513','#16a34a','#ec4899','#2563eb','#f59e0b','#10b981','#ef4444','#6b7280'];
+              return palette[i % palette.length];
+            });
+            
+            currentChart = new Chart(chartEl, {
+              type: 'bar',
+              data: { 
+                labels: breedLabels, 
+                datasets: [{
+                  label: 'Number Sold',
+                  data: breedData,
+                  backgroundColor: colors,
+                  borderColor: colors.map(function(c) { return c; }),
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: { 
+                  legend: { display: false },
+                  title: { display: true, text: 'Total Sold by Breed' }
+                },
+                scales: { 
+                  y: { 
+                    beginAtZero: true,
+                    title: { display: true, text: 'Number of Livestock Sold' }
+                  },
+                  x: {
+                    title: { display: true, text: 'Breed' }
+                  }
+                }
+              }
+            });
+            currentView = 'breed';
+            breedBtn.style.background = '#2563eb';
+            livestockBtn.style.background = '#4a5568';
+          }
+          
+          // Initialize with livestock type view
+          createLivestockChart();
+          
+          // Add toggle event listeners
+          if (livestockBtn) {
+            livestockBtn.addEventListener('click', function() {
+              if (currentView !== 'livestock') createLivestockChart();
+            });
+          }
+          
+          if (breedBtn) {
+            breedBtn.addEventListener('click', function() {
+              if (currentView !== 'breed') createBreedChart();
+            });
+          }
+          
+        } catch(e) {
+          console.error('Chart initialization error:', e);
+        }
       })();
     </script>
     <script>

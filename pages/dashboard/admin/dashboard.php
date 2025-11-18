@@ -31,7 +31,7 @@ if ($typesStatus>=200 && $typesStatus<300 && is_array($typesRes)){
 if (count($typeNames)===0){ $typeNames = ['Cattle','Goat','Pigs']; }
 
 // Fetch sold listings; filter in PHP to avoid complex PostgREST params here
-[$soldRes,$soldStatus,$soldErr] = sb_rest('GET','soldlivestocklisting',['select'=>'livestock_type,price,created']);
+[$soldRes,$soldStatus,$soldErr] = sb_rest('GET','activelivestocklisting',['select'=>'livestock_type,price,created','status'=>'eq.Sold']);
 $series = [];
 foreach ($typeNames as $tn){ $series[$tn] = array_fill(0, count($monthKeys), 0); }
 if ($soldStatus>=200 && $soldStatus<300 && is_array($soldRes)){

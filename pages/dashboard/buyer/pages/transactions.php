@@ -40,7 +40,7 @@ if (isset($_GET['action']) && $_GET['action']==='list'){
   ]);
   if (!($sst>=200 && $sst<300) || !is_array($srows)) $srows = [];
   [$orows,$ost,$ose] = sb_rest('GET','ongoingtransactions',[
-    'select'=>'transaction_id,listing_id,seller_id,buyer_id,status,started_at,buyer:buyer(user_id,user_fname,user_mname,user_lname,email,contact,location),seller:seller(user_id,user_fname,user_mname,user_lname,email,contact,location),listing:activelivestocklisting(listing_id,livestock_type,breed,price,created,address)',
+    'select'=>'transaction_id,listing_id,seller_id,buyer_id,status,started_at,transaction_date,transaction_location,bat_id,bat:bat(user_id,user_fname,user_mname,user_lname),buyer:buyer(user_id,user_fname,user_mname,user_lname,email,contact,location),seller:seller(user_id,user_fname,user_mname,user_lname,email,contact,location),listing:activelivestocklisting(listing_id,livestock_type,breed,price,created,address)',
     'buyer_id'=>'eq.'.$buyerId,
     'order'=>'started_at.desc'
   ]);
@@ -66,11 +66,19 @@ if (isset($_GET['action']) && $_GET['action']==='list'){
     $digits = preg_replace('/\D+/', '', (string)$created);
     $createdKey = substr($digits, 0, 14);
     $legacyFolder = ((int)($r['seller_id'] ?? 0)).'_'.((int)($listing['listing_id'] ?? 0));
-    $root = 'listings/verified';
+    
+    // Determine status folder based on listing status
+    $status = strtolower($listing['status'] ?? 'active');
+    $statusFolder = 'active'; // default
+    if ($status === 'verified') $statusFolder = 'verified';
+    elseif ($status === 'sold') $statusFolder = 'sold';
+    elseif ($status === 'underreview') $statusFolder = 'underreview';
+    elseif ($status === 'denied') $statusFolder = 'denied';
+    
     $thumb = ($createdKey !== '')
-      ? ('../../bat/pages/storage_image.php?path='.$root.'/'.$sellerNewFolder.'/'.$createdKey.'_1img.jpg')
-      : ('../../bat/pages/storage_image.php?path='.$root.'/'.$legacyFolder.'/image1');
-    $thumb_fallback = '../../bat/pages/storage_image.php?path='.$root.'/'.$legacyFolder.'/image1';
+      ? ('../../bat/pages/storage_image.php?path=listings/'.$statusFolder.'/'.$sellerNewFolder.'/'.$createdKey.'_1img.jpg')
+      : ('../../bat/pages/storage_image.php?path=listings/'.$statusFolder.'/'.$legacyFolder.'/image1');
+    $thumb_fallback = '../../bat/pages/storage_image.php?path=listings/'.$statusFolder.'/'.$legacyFolder.'/image1';
     // Seller location
     $lat=null; $lng=null;
     if (!empty($seller['location'])){
@@ -78,6 +86,26 @@ if (isset($_GET['action']) && $_GET['action']==='list'){
       if (is_array($loc)){ $lat = $loc['lat'] ?? null; $lng = $loc['lng'] ?? null; }
     }
     $r['thumb'] = $thumb; $r['thumb_fallback'] = $thumb_fallback; $r['lat']=$lat; $r['lng']=$lng;
+    
+    // Add meet-up details from ongoingtransactions
+    if (isset($r['transaction_date'])) {
+      $r['meetup_date'] = date('Y-m-d', strtotime($r['transaction_date']));
+      $r['meetup_time'] = date('H:i', strtotime($r['transaction_date']));
+    } else {
+      $r['meetup_date'] = null;
+      $r['meetup_time'] = null;
+    }
+    
+    $r['meetup_location'] = $r['transaction_location'] ?? null;
+    
+    // Add BAT fullname
+    if (isset($r['bat'])) {
+      $bat = $r['bat'];
+      $r['bat_fullname'] = trim(($bat['user_fname']??'').' '.($bat['user_mname']??'').' '.($bat['user_lname']??''));
+    } else {
+      $r['bat_fullname'] = null;
+    }
+    
     $out[] = $r;
   }
   echo json_encode(['ok'=>true,'data'=>$out]);

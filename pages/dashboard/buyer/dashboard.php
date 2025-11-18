@@ -15,7 +15,7 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buyer Dashboard</title>
+    <title>Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style/dashboard.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -57,7 +57,7 @@ $statusLabel = $isVerified ? 'Verified' : 'Under review';
     <div class="wrap">
         <div class="top">
             <div>
-                <h1>Buyer Dashboard</h1>
+                <h1>Dashboard</h1>
             </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
