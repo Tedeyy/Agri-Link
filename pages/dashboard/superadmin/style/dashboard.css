@@ -26,7 +26,7 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
 /* Mobile Responsive Design */
 @media (max-width: 768px) {
   body {
-    padding: 8px;
+    padding: 4px;
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
   }
@@ -34,30 +34,30 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
   .wrap {
     max-width: 100%;
     margin: 0;
-    padding: 0 4px;
+    padding: 0 2px;
   }
   
   .card {
-    padding: 12px;
-    margin-bottom: 8px;
-    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+    border-radius: 4px;
   }
   
   h1 {
-    font-size: 22px;
-    margin-bottom: 8px;
+    font-size: 20px;
+    margin-bottom: 6px;
   }
   
   h3 {
-    font-size: 18px;
-    margin-bottom: 8px;
+    font-size: 16px;
+    margin-bottom: 6px;
   }
   
   .navbar {
     position: relative;
-    padding: 6px 8px;
-    margin-bottom: 8px;
-    min-height: 40px;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+    min-height: 32px;
   }
   
   .nav-left {
@@ -66,7 +66,7 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
   }
   
   .brand {
-    font-size: 16px;
+    font-size: 14px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -81,7 +81,7 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
     background: #fff;
     border: 1px solid #e2e8f0;
     border-top: none;
-    border-radius: 0 0 6px 6px;
+    border-radius: 0 0 4px 4px;
     flex-direction: column;
     gap: 0;
     padding: 0;
@@ -97,22 +97,30 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
   
   .nav-right .btn,
   .nav-right .greeting,
-  .nav-right .profile {
+  .nav-right .profile,
+  .nav-right .mobile-nav-item {
     width: 100%;
     text-align: left;
-    padding: 8px 12px;
+    padding: 6px 8px;
     border-radius: 0;
     border-bottom: 1px solid #f3f4f6;
     margin: 0;
     display: block;
-    font-size: 14px;
-    min-height: 36px;
-    line-height: 20px;
+    font-size: 13px;
+    min-height: 32px;
+    line-height: 18px;
+  }
+  
+  /* Preserve original button styles in mobile menu */
+  .nav-right .mobile-nav-item[style*="background:#4a5568"] {
+    background: #4a5568 !important;
+    color: #fff !important;
   }
   
   .nav-right .btn:last-child,
   .nav-right .greeting:last-child,
-  .nav-right .profile:last-child {
+  .nav-right .profile:last-child,
+  .nav-right .mobile-nav-item:last-child {
     border-bottom: none;
   }
   
@@ -120,27 +128,27 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
     display: flex;
     flex-direction: column;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     cursor: pointer;
     position: relative;
     z-index: 1001;
-    padding: 2px;
-    margin-left: 4px;
+    padding: 1px;
+    margin-left: 2px;
   }
   
   .hamburger span {
     display: block;
-    width: 16px;
+    width: 14px;
     height: 2px;
     background: #2d3748;
-    margin: 2px 0;
+    margin: 1px 0;
     transition: 0.3s;
     border-radius: 1px;
   }
   
   .hamburger.active span:nth-child(1) {
-    transform: rotate(45deg) translate(3px, 3px);
+    transform: rotate(45deg) translate(2px, 2px);
   }
   
   .hamburger.active span:nth-child(2) {
@@ -148,33 +156,33 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
   }
   
   .hamburger.active span:nth-child(3) {
-    transform: rotate(-45deg) translate(3px, -3px);
+    transform: rotate(-45deg) translate(2px, -2px);
   }
   
   .grid-2 {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
   }
   
   .table-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin: 0 -4px;
-    padding: 0 4px;
+    margin: 0 -2px;
+    padding: 0 2px;
   }
   
   .table-simple th,
   .table-simple td {
-    padding: 6px 4px;
-    font-size: 12px;
+    padding: 4px 2px;
+    font-size: 11px;
     white-space: nowrap;
   }
   
   .search input {
     width: 100%;
-    max-width: 120px;
-    font-size: 14px;
-    padding: 4px 8px;
+    max-width: 100px;
+    font-size: 13px;
+    padding: 3px 6px;
   }
   
   .nav-center {
@@ -182,13 +190,13 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
   }
   
   .btn {
-    padding: 6px 10px;
-    font-size: 14px;
-    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 13px;
+    min-height: 28px;
   }
   
   .meta {
-    font-size: 14px;
+    font-size: 13px;
   }
   
   form, input, select, textarea {
@@ -196,13 +204,9 @@ a.btn{display:inline-block;margin-top:12px;padding:8px 14px;border-radius:8px;ba
   }
 }
 
-/* Hide hamburger on desktop and show nav-center */
+/* Hide hamburger on desktop */
 @media (min-width: 769px) {
   .hamburger {
     display: none;
-  }
-  
-  .nav-center {
-    display: flex !important;
   }
 }

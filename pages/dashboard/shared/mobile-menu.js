@@ -5,11 +5,40 @@ document.addEventListener('DOMContentLoaded', function() {
   const navCenter = document.querySelector('.nav-center');
   
   if (hamburger && navRight && navCenter) {
-    // Clone nav-center buttons to mobile menu
-    const mobileMenuButtons = navCenter.querySelectorAll('.btn');
-    mobileMenuButtons.forEach(button => {
-      const clonedButton = button.cloneNode(true);
-      navRight.appendChild(clonedButton);
+    // Only clone nav-center buttons for mobile screens
+    function setupMobileMenu() {
+      // Remove any previously cloned buttons
+      const existingClones = navRight.querySelectorAll('.mobile-nav-item');
+      existingClones.forEach(clone => clone.remove());
+      
+      // If mobile screen, clone nav-center buttons
+      if (window.innerWidth <= 768) {
+        const navCenterButtons = navCenter.querySelectorAll('.btn');
+        const clonedButtons = Array.from(navCenterButtons).map(btn => {
+          const clone = btn.cloneNode(true);
+          clone.classList.add('mobile-nav-item');
+          return clone;
+        });
+        
+        // Insert cloned buttons at the beginning of nav-right
+        clonedButtons.reverse().forEach(clone => {
+          navRight.insertBefore(clone, navRight.firstChild);
+        });
+      }
+    }
+    
+    // Initial setup
+    setupMobileMenu();
+    
+    // Re-setup on window resize
+    window.addEventListener('resize', function() {
+      setupMobileMenu();
+      
+      // Close menu when resized to desktop size
+      if (window.innerWidth > 768) {
+        hamburger.classList.remove('active');
+        navRight.classList.remove('mobile-open');
+      }
     });
     
     hamburger.addEventListener('click', function() {
@@ -20,14 +49,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Close menu when clicking outside
     document.addEventListener('click', function(event) {
       if (!hamburger.contains(event.target) && !navRight.contains(event.target)) {
-        hamburger.classList.remove('active');
-        navRight.classList.remove('mobile-open');
-      }
-    });
-    
-    // Close menu when window is resized to desktop size
-    window.addEventListener('resize', function() {
-      if (window.innerWidth > 768) {
         hamburger.classList.remove('active');
         navRight.classList.remove('mobile-open');
       }

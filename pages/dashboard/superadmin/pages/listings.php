@@ -133,30 +133,41 @@ $batNames = fetchUserNames($batIds, 'bat');
         @media (max-width: 768px) {
             body {
                 font-size: 16px;
-                padding: 8px;
+                padding: 4px;
             }
             
             .wrap {
-                padding: 0 4px;
+                padding: 0 2px;
             }
             
             .card {
-                padding: 12px;
-                border-radius: 6px;
+                padding: 8px;
+                border-radius: 4px;
             }
             
             h1 {
-                font-size: 22px;
+                font-size: 20px;
+                margin-bottom: 6px;
             }
             
             th, td {
-                padding: 6px 4px;
-                font-size: 12px;
+                padding: 4px 2px;
+                font-size: 11px;
             }
             
             .pagination button {
-                padding: 6px 8px;
-                font-size: 12px;
+                padding: 4px 6px;
+                font-size: 11px;
+                min-height: 24px;
+            }
+            
+            .table-container {
+                margin-top: 12px;
+            }
+            
+            .status-denied {
+                padding: 2px 4px;
+                font-size: 11px;
             }
         }
     </style>
@@ -166,22 +177,13 @@ $batNames = fetchUserNames($batIds, 'bat');
         <div class="nav-left">
             <div class="brand">Livestock Listing Logs</div>
         </div>
-        <div class="nav-center" style="display:flex;gap:16px;align-items:center;">
-            <a class="btn" href="../dashboard.php">Dashboard</a>
-            <a class="btn" href="generatereports.php">Generate Reports</a>
-            <a class="btn" href="usermanagement.php">User Management</a>
-            <a class="btn" href="price_actions.php">Price Actions</a>
-            <a class="btn" href="listing_actions.php">Listing Actions</a>
-            <a class="btn" href="security.php">Security</a>
-            <a class="btn" href="price_management.php">Price Management</a>
-            <a class="btn" href="../../logout.php">Logout</a>
-        </div>
         <div class="nav-right">
             <div class="hamburger" aria-label="Toggle mobile menu">
                 <span></span>
                 <span></span>
                 <span></span>
             </div>
+            <a class="btn" href="../dashboard.php">Back to Dashboard</a>
         </div>
     </nav>
 

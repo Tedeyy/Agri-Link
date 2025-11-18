@@ -46,7 +46,6 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
             <a class="btn" href="pages/listing_actions.php">Listing Actions</a>
             <a class="btn" href="pages/security.php">Security</a>
             <a class="btn" href="pages/price_management.php" style="background:#4a5568;">Price Management</a>
-            <a class="btn" href="../logout.php">Logout</a>
         </div>
         <div class="nav-right">
             <div class="hamburger" aria-label="Toggle mobile menu">
@@ -55,6 +54,7 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
                 <span></span>
             </div>
             <div class="greeting">hello <?php echo htmlspecialchars($firstname, ENT_QUOTES, 'UTF-8'); ?></div>
+            <a class="btn" href="../logout.php">Logout</a>
             <a class="notify" href="#" aria-label="Notifications" title="Notifications" style="position:relative;">
                 <span class="avatar">🔔</span>
                 <span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;border-radius:999px;padding:0 6px;font-size:10px;line-height:16px;min-width:16px;text-align:center;">0</span>
