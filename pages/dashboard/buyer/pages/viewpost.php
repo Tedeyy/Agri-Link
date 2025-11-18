@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
+require_once __DIR__ . '/../../../authentication/lib/use_case_logger.php';
 
 function safe($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
@@ -18,6 +19,18 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['action']) && $_POST['ac
   $payload = [[ 'listing_id'=>$listing_id, 'buyer_id'=>(int)$buyer_id, 'message'=>$message!==''?$message:null ]];
   sb_rest('POST','listinginterest',[], $payload, ['Prefer: return=representation']);
   sb_rest('POST','listinginterest_log',[], $payload, ['Prefer: return=representation']);
+  
+  // Log use case: Buyer initiated transaction interest
+  $purpose = format_use_case_description('Transaction Interest Initiated', [
+    'listing_id' => $listing_id,
+    'seller_id' => $r['seller_id'] ?? null,
+    'livestock_type' => $r['livestock_type'] ?? '',
+    'breed' => $r['breed'] ?? '',
+    'price' => $r['price'] ?? '',
+    'message_length' => strlen($message)
+  ]);
+  log_use_case($purpose);
+  
   echo json_encode(['ok'=>true]);
   exit;
 }

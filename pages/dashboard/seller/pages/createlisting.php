@@ -1,6 +1,9 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
+require_once __DIR__ . '/../../../authentication/lib/use_case_logger.php';
+
+function safe($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
 $firstname = isset($_SESSION['firstname']) && $_SESSION['firstname'] !== '' ? $_SESSION['firstname'] : 'User';
 $seller_id = $_SESSION['seller_id'] ?? ($_SESSION['user_id'] ?? null);
@@ -97,6 +100,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $created = is_array($ires) && isset($ires[0]) ? $ires[0] : null;
         $listingId = $created['listing_id'] ?? null;
         $createdAt = $created['created'] ?? null;
+
+        // Log use case: Seller created new livestock listing
+        $purpose = format_use_case_description('Livestock Listing Created', [
+          'listing_id' => $listingId,
+          'livestock_type' => $livestock_type_name,
+          'breed' => $breed_name,
+          'age' => $age . ' years',
+          'weight' => $weight . ' kg',
+          'price' => '₱' . number_format($price, 2),
+          'address' => substr($address, 0, 100) . (strlen($address) > 100 ? '...' : ''),
+          'photo_count' => isset($_FILES['photos']) ? count($_FILES['photos']['name']) : 0
+        ]);
+        log_use_case($purpose);
 
         // 3) Upload photos to storage bucket path listings/underreview/<seller_id>_<fullname>/
         if ($listingId && isset($_FILES['photos']) && is_array($_FILES['photos']['name'])){

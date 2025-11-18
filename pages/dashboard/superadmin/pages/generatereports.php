@@ -1,12 +1,13 @@
 <?php
 session_start();
+require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Generate Reports</title>
+  <title>Livestock Trading Reports</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../style/dashboard.css">
   <style>
@@ -48,6 +49,424 @@ session_start();
     }
     .stats-grid {
       display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #059669;
+      margin-bottom: 5px;
+    }
+    .stat-label {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-top: 20px;
+    }
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+    }
+    .report-table th {
+      background: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .report-table td {
+      padding: 12px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .report-table tr:hover {
+      background: #f9fafb;
+    }
+    .filter-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 20px;
+    }
+    .filter-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .filter-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .filter-group input,
+    .filter-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .btn-generate {
+      background: #059669;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-generate:hover {
+      background: #047857;
+    }
+    .livestock-type-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .type-cattle { background: #fef3c7; color: #92400e; }
+    .type-swine { background: #dbeafe; color: #1e40af; }
+    .type-goat { background: #d1fae5; color: #065f46; }
+    .type-poultry { background: #fce7f3; color: #9f1239; }
+    .status-active { background: #d1fae5; color: #065f46; }
+    .status-sold { background: #fee2e2; color: #991b1b; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-denied { background: #f3f4f6; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="report-container">
+    <div class="report-header">
+      <h1 class="report-title">Livestock Trading Activity Report</h1>
+      <p class="report-period" id="reportPeriod">January 2024</p>
+    </div>
+
+    <div class="filter-section">
+      <h2 class="section-title">Report Filters</h2>
+      <div class="filter-group">
+        <div>
+          <label for="monthFrom">From Month</label>
+          <input type="month" id="monthFrom" value="2024-01">
+        </div>
+        <div>
+          <label for="monthTo">To Month</label>
+          <input type="month" id="monthTo" value="2024-12">
+        </div>
+        <div>
+          <label for="livestockType">Livestock Type</label>
+          <select id="livestockType">
+            <option value="">All Types</option>
+            <option value="Cattle">Cattle</option>
+            <option value="Swine">Swine</option>
+            <option value="Goat">Goat</option>
+            <option value="Poultry">Poultry</option>
+          </select>
+        </div>
+        <div>
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Sold">Sold</option>
+            <option value="Pending">Pending</option>
+            <option value="Denied">Denied</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-generate" onclick="generateReport()">Generate Report</button>
+    </div>
+
+    <div class="report-section">
+      <h2 class="section-title">Trading Overview</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">247</div>
+          <div class="stat-label">Total Listings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">89</div>
+          <div class="stat-label">Completed Transactions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">₱2.4M</div>
+          <div class="stat-label">Total Revenue</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">156</div>
+          <div class="stat-label">Active Buyers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">89</div>
+          <div class="stat-label">Active Sellers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">₱27,000</div>
+          <div class="stat-label">Avg Transaction Value</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="report-section">
+      <h2 class="section-title">Livestock Type Distribution</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">98</div>
+          <div class="stat-label">Cattle Listings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">67</div>
+          <div class="stat-label">Swine Listings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">45</div>
+          <div class="stat-label">Goat Listings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">37</div>
+          <div class="stat-label">Poultry Listings</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="report-section">
+      <h2 class="section-title">Recent Transactions</h2>
+      <div class="table-container">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Transaction ID</th>
+              <th>Date</th>
+              <th>Livestock</th>
+              <th>Type</th>
+              <th>Seller</th>
+              <th>Buyer</th>
+              <th>Price</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>#TX001</td>
+              <td>2024-01-15</td>
+              <td>Brahman Cow</td>
+              <td><span class="livestock-type-badge type-cattle">Cattle</span></td>
+              <td>Juan Santos</td>
+              <td>Maria Reyes</td>
+              <td>₱45,000</td>
+              <td><span class="livestock-type-badge status-sold">Sold</span></td>
+            </tr>
+            <tr>
+              <td>#TX002</td>
+              <td>2024-01-14</td>
+              <td>Landrace Pig</td>
+              <td><span class="livestock-type-badge type-swine">Swine</span></td>
+              <td>Carlos Mendoza</td>
+              <td>Ana Torres</td>
+              <td>₱12,000</td>
+              <td><span class="livestock-type-badge status-sold">Sold</span></td>
+            </tr>
+            <tr>
+              <td>#TX003</td>
+              <td>2024-01-13</td>
+              <td>Boer Goat</td>
+              <td><span class="livestock-type-badge type-goat">Goat</span></td>
+              <td>Ricardo Cruz</td>
+              <td>Luis Martinez</td>
+              <td>₱18,500</td>
+              <td><span class="livestock-type-badge status-active">Active</span></td>
+            </tr>
+            <tr>
+              <td>#TX004</td>
+              <td>2024-01-12</td>
+              <td>Broiler Chicken</td>
+              <td><span class="livestock-type-badge type-poultry">Poultry</span></td>
+              <td>Elena Rodriguez</td>
+              <td>Roberto Sanchez</td>
+              <td>₱3,200</td>
+              <td><span class="livestock-type-badge status-sold">Sold</span></td>
+            </tr>
+            <tr>
+              <td>#TX005</td>
+              <td>2024-01-11</td>
+              <td>Hereford Bull</td>
+              <td><span class="livestock-type-badge type-cattle">Cattle</span></td>
+              <td>Miguel Flores</td>
+              <td>Diana Castillo</td>
+              <td>₱52,000</td>
+              <td><span class="livestock-type-badge status-pending">Pending</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="report-section">
+      <h2 class="section-title">Top Sellers by Revenue</h2>
+      <div class="table-container">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Seller Name</th>
+              <th>Listings</th>
+              <th>Sold</th>
+              <th>Revenue</th>
+              <th>Avg Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Juan Santos</td>
+              <td>12</td>
+              <td>8</td>
+              <td>₱324,000</td>
+              <td>₱40,500</td>
+            </tr>
+            <tr>
+              <td>Carlos Mendoza</td>
+              <td>8</td>
+              <td>6</td>
+              <td>₱156,000</td>
+              <td>₱26,000</td>
+            </tr>
+            <tr>
+              <td>Ricardo Cruz</td>
+              <td>10</td>
+              <td>5</td>
+              <td>₱142,500</td>
+              <td>₱28,500</td>
+            </tr>
+            <tr>
+              <td>Elena Rodriguez</td>
+              <td>15</td>
+              <td>11</td>
+              <td>₱98,700</td>
+              <td>₱8,970</td>
+            </tr>
+            <tr>
+              <td>Miguel Flores</td>
+              <td>6</td>
+              <td>4</td>
+              <td>₱87,200</td>
+              <td>₱21,800</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="report-section">
+      <h2 class="section-title">Monthly Trading Trends</h2>
+      <div class="table-container">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>New Listings</th>
+              <th>Transactions</th>
+              <th>Revenue</th>
+              <th>Avg Price</th>
+              <th>Active Users</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>January 2024</td>
+              <td>67</td>
+              <td>24</td>
+              <td>₱648,000</td>
+              <td>₱27,000</td>
+              <td>245</td>
+            </tr>
+            <tr>
+              <td>December 2023</td>
+              <td>58</td>
+              <td>19</td>
+              <td>₱523,000</td>
+              <td>₱27,526</td>
+              <td>238</td>
+            </tr>
+            <tr>
+              <td>November 2023</td>
+              <td>72</td>
+              <td>28</td>
+              <td>₱756,000</td>
+              <td>₱27,000</td>
+              <td>252</td>
+            </tr>
+            <tr>
+              <td>October 2023</td>
+              <td>50</td>
+              <td>18</td>
+              <td>₱486,000</td>
+              <td>₱27,000</td>
+              <td>231</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function generateReport() {
+      const monthFrom = document.getElementById('monthFrom').value;
+      const monthTo = document.getElementById('monthTo').value;
+      const livestockType = document.getElementById('livestockType').value;
+      const status = document.getElementById('status').value;
+      
+      // Update report period
+      if (monthFrom && monthTo) {
+        const from = new Date(monthFrom);
+        const to = new Date(monthTo);
+        const fromMonth = from.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const toMonth = to.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        
+        if (monthFrom === monthTo) {
+          document.getElementById('reportPeriod').textContent = fromMonth;
+        } else {
+          document.getElementById('reportPeriod').textContent = `${fromMonth} - ${toMonth}`;
+        }
+      }
+      
+      // Here you would typically make an API call to fetch filtered data
+      // For now, we'll just show an alert
+      alert(`Report generated with filters:\nFrom: ${monthFrom}\nTo: ${monthTo}\nLivestock Type: ${livestockType || 'All'}\nStatus: ${status || 'All'}`);
+    }
+    
+    // Set current month as default
+    const now = new Date();
+    const currentMonth = now.toISOString().slice(0, 7);
+    document.getElementById('monthTo').value = currentMonth;
+    
+    // Update report period display
+    const monthTo = document.getElementById('monthTo').value;
+    if (monthTo) {
+      const to = new Date(monthTo);
+      const toMonth = to.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      document.getElementById('reportPeriod').textContent = toMonth;
+    }
+  </script>
+</body>
+</html>
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 15px;
       margin-bottom: 20px;

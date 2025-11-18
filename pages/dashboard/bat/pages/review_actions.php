@@ -1,7 +1,9 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
+require_once __DIR__ . '/../../../authentication/lib/use_case_logger.php';
 
+function esc($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 if (($_SESSION['role'] ?? '') !== 'bat'){
   http_response_code(302);
   header('Location: ../dashboard.php');
@@ -51,6 +53,17 @@ if ($action === 'approve'){
   if (!($as>=200 && $as<300)){
     $_SESSION['flash_error'] = 'Approve failed.';
   } else {
+    // Log use case: BAT approved listing
+    $purpose = format_use_case_description('Listing Approved by BAT', [
+      'listing_id' => $listing_id,
+      'seller_id' => $rec['seller_id'],
+      'livestock_type' => $rec['livestock_type'],
+      'breed' => $rec['breed'],
+      'price' => '₱' . number_format((float)$rec['price'], 2),
+      'address' => substr($rec['address'], 0, 100) . (strlen($rec['address']) > 100 ? '...' : '')
+    ]);
+    log_use_case($purpose);
+    
     // log action: status Pending with bat_id
     $logPayload = [[
       'seller_id'=>(int)$rec['seller_id'],
@@ -84,6 +97,17 @@ if ($action === 'approve'){
   if (!($ds>=200 && $ds<300)){
     $_SESSION['flash_error'] = 'Deny failed.';
   } else {
+    // Log use case: BAT denied listing
+    $purpose = format_use_case_description('Listing Denied by BAT', [
+      'listing_id' => $listing_id,
+      'seller_id' => $rec['seller_id'],
+      'livestock_type' => $rec['livestock_type'],
+      'breed' => $rec['breed'],
+      'price' => '₱' . number_format((float)$rec['price'], 2),
+      'address' => substr($rec['address'], 0, 100) . (strlen($rec['address']) > 100 ? '...' : '')
+    ]);
+    log_use_case($purpose);
+    
     // log action: status Denied with bat_id
     $logPayload = [[
       'seller_id'=>(int)$rec['seller_id'],

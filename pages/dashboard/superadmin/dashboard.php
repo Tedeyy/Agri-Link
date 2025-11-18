@@ -40,12 +40,10 @@ if ($logSt>=200 && $logSt<300 && is_array($logRows)) { $logs = $logRows; }
             </form>
         </div>
         <div class="nav-center" style="display:flex;gap:16px;align-items:center;">
-            <a class="btn" href="pages/logs.php">Monitoring</a>
-            <a class="btn" href="pages/generatereports.php">Generate Sales Reports</a>
-            <a class="btn" href="pages/mapping.php">Mapping</a>
-            <a class="btn" href="pages/analytics.php">Analytics</a>
-            <a class="btn" href="pages/violations.php">Violations</a>
-            <a class="btn" href="pages/backups.php">Backups</a>
+            <a class="btn" href="pages/generatereports.php">Generate Reports</a>
+            <a class="btn" href="pages/usermanagement.php">User Management</a>
+            <a class="btn" href="pages/price_actions.php">Price Actions</a>
+            <a class="btn" href="pages/listing_actions.php">Listing Actions</a>
             <a class="btn" href="pages/security.php">Security</a>
             <a class="btn" href="pages/price_management.php" style="background:#4a5568;">Price Management</a>
         </div>

@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../../../authentication/lib/supabase_client.php';
+require_once __DIR__ . '/../../../authentication/lib/use_case_logger.php';
 
 // Allow all roles; require login only
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -108,6 +109,19 @@ if (isset($_POST['action']) && $_POST['action']==='complete_transaction'){
     echo json_encode(['ok'=>false,'error'=>'failed_to_complete','code'=>$compStatus]);
     exit;
   }
+  
+  // Log use case: Transaction completed by seller
+  $purpose = format_use_case_description('Transaction Completed', [
+    'transaction_id' => $transactionId,
+    'listing_id' => $listingId,
+    'buyer_id' => $buyerId,
+    'final_price' => '₱' . number_format($price, 2),
+    'payment_method' => $paymentMethod,
+    'result' => $result,
+    'location' => $transaction['transaction_location'] ?? 'Not specified',
+    'has_document' => $docPhotoPath ? 'Yes' : 'No'
+  ]);
+  log_use_case($purpose);
   
   // Add to transactions_logs
   sb_rest('POST','transactions_logs',[],[
